@@ -1,22 +1,22 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useAuth } from '../contexts/AuthContext'
 import ResourceCard from '../components/ResourceCard'
 import { getSavedResources } from '../../firebase/services/userActivityService'
 import { getResources } from '../../firebase/services/adminService'
 import { ToastContainer, useToast } from '../components/Toast'
-import { 
-  Search, 
-  Filter, 
-  Briefcase, 
-  BookOpen, 
+import {
+  Search,
+  Filter,
+  Briefcase,
+  BookOpen,
   Wrench,
   Loader2
 } from 'lucide-react'
 
-export default function ResourcesPage() {
+function ResourcesContent() {
   const { user } = useAuth()
   const { toasts, removeToast } = useToast()
   const searchParams = useSearchParams()
@@ -232,5 +232,20 @@ export default function ResourcesPage() {
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
+  )
+}
+
+export default function ResourcesPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading resources...</p>
+        </div>
+      </div>
+    }>
+      <ResourcesContent />
+    </Suspense>
   )
 }
