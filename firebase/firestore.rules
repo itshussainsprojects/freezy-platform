@@ -1,0 +1,179 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isApprovedUser() {
+      return isAuthenticated() && 
+             getUserData().subscription.approval_status == 'approved';
+    }
+    
+    function hasAccessToResourceLevel(resourceAccessLevel) {
+      let userData = getUserData();
+      let userPlan = userData.subscription.selected_plan;
+      let approvalStatus = userData.subscription.approval_status;
+      
+      // Demo content is accessible to everyone
+      if (resourceAccessLevel == 'demo') {
+        return true;
+      }
+      
+      // Must be approved for non-demo content
+      if (approvalStatus != 'approved') {
+        return false;
+      }
+      
+      // Check plan hierarchy
+      return (userPlan == 'free' && resourceAccessLevel in ['demo', 'free']) ||
+             (userPlan == 'pro' && resourceAccessLevel in ['demo', 'free', 'pro']) ||
+             (userPlan == 'enterprise' && resourceAccessLevel in ['demo', 'free', 'pro', 'enterprise']);
+    }
+    
+    // Users collection rules
+    match /users/{userId} {
+      // Users can read and write their own data
+      allow read, write: if isAuthenticated() && isOwner(userId);
+      
+      // Admins can read all user data
+      allow read: if isAdmin();
+      
+      // Admins can update subscription status
+      allow update: if isAdmin() && 
+                   request.writeFields.hasOnly(['subscription']) &&
+                   request.resource.data.diff(resource.data).affectedKeys()
+                     .hasOnly(['subscription.approval_status', 
+                              'subscription.approved_by', 
+                              'subscription.approved_at',
+                              'subscription.selected_plan']);
+    }
+    
+    // Resources collection rules
+    match /resources/{resourceId} {
+      // Read access based on user approval status and plan
+      allow read: if isAuthenticated() && 
+                     (resource.data.visibility.access_level == 'demo' ||
+                      hasAccessToResourceLevel(resource.data.visibility.access_level));
+      
+      // Only admins can write resources
+      allow write: if isAdmin();
+      
+      // Allow analytics updates for authenticated users
+      allow update: if isAuthenticated() && 
+                       request.writeFields.hasOnly(['analytics']) &&
+                       request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['analytics.view_count', 
+                                  'analytics.save_count', 
+                                  'analytics.application_count',
+                                  'analytics.last_updated']);
+    }
+    
+    // Admin actions collection - admin only
+    match /admin_actions/{actionId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Admins collection - admin only
+    match /admins/{adminId} {
+      allow read: if isAdmin();
+      allow write: if false; // Admins should be managed through Firebase Console
+    }
+    
+    // Notifications collection
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isAuthenticated() && 
+                     resource.data.user_id == request.auth.uid;
+      
+      // Only system/admins can create notifications
+      allow create: if isAdmin();
+      
+      // Users can update their own notifications (mark as read)
+      allow update: if isAuthenticated() && 
+                       resource.data.user_id == request.auth.uid &&
+                       request.writeFields.hasOnly(['read_at', 'is_read']);
+    }
+    
+    // System logs collection - admin only
+    match /system_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false; // Logs are created by Cloud Functions
+    }
+    
+    // Scraping logs collection - admin only
+    match /scraping_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false; // Logs are created by Cloud Functions
+    }
+    
+    // User feedback collection
+    match /feedback/{feedbackId} {
+      // Users can create feedback
+      allow create: if isAuthenticated() && 
+                       request.resource.data.user_id == request.auth.uid;
+      
+      // Users can read their own feedback
+      allow read: if isAuthenticated() && 
+                     resource.data.user_id == request.auth.uid;
+      
+      // Admins can read all feedback
+      allow read: if isAdmin();
+      
+      // Admins can update feedback status
+      allow update: if isAdmin() && 
+                       request.writeFields.hasOnly(['status', 'admin_response', 'updated_at']);
+    }
+    
+    // Categories collection - read-only for users
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Analytics collection - admin only
+    match /analytics/{analyticsId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // FCM tokens collection
+    match /fcm_tokens/{tokenId} {
+      // Users can manage their own FCM tokens
+      allow read, write: if isAuthenticated() && 
+                            resource.data.user_id == request.auth.uid;
+      
+      // Admins can read all tokens for notifications
+      allow read: if isAdmin();
+    }
+    
+    // Saved resources subcollection
+    match /users/{userId}/saved_resources/{resourceId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Application history subcollection
+    match /users/{userId}/applications/{applicationId} {
+      allow read, write: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // Default deny rule
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

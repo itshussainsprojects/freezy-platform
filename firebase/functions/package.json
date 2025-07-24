@@ -1,0 +1,43 @@
+{
+  "name": "freezy-firebase-functions",
+  "version": "1.0.0",
+  "description": "Firebase Cloud Functions for Freezy Platform",
+  "main": "index.js",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log",
+    "test": "jest",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "engines": {
+    "node": "18"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^4.8.0",
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "eslint": "^8.15.0",
+    "eslint-config-google": "^0.14.0",
+    "firebase-functions-test": "^3.1.0",
+    "jest": "^29.0.0"
+  },
+  "private": true,
+  "keywords": [
+    "firebase",
+    "functions",
+    "freezy",
+    "scraping",
+    "notifications"
+  ],
+  "author": "Freezy Team",
+  "license": "MIT"
+}
