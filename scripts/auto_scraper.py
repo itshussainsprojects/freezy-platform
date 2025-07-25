@@ -14,6 +14,44 @@ import json
 import time
 from datetime import datetime
 import sys
+import re
+
+def clean_html_content(text):
+    """Clean HTML tags and convert to readable text"""
+    if not text:
+        return ""
+
+    # Remove HTML tags
+    soup = BeautifulSoup(text, 'html.parser')
+
+    # Convert common HTML elements to readable format
+    for br in soup.find_all('br'):
+        br.replace_with('\n')
+
+    for p in soup.find_all('p'):
+        p.insert_after('\n')
+
+    for h in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+        h.insert_before('\n')
+        h.insert_after('\n')
+
+    for li in soup.find_all('li'):
+        li.insert_before('• ')
+        li.insert_after('\n')
+
+    # Get clean text
+    clean_text = soup.get_text()
+
+    # Clean up extra whitespace and newlines
+    clean_text = re.sub(r'\n\s*\n', '\n\n', clean_text)  # Multiple newlines to double
+    clean_text = re.sub(r'[ \t]+', ' ', clean_text)      # Multiple spaces to single
+    clean_text = clean_text.strip()
+
+    # Limit length to prevent overly long descriptions
+    if len(clean_text) > 1000:
+        clean_text = clean_text[:1000] + "..."
+
+    return clean_text
 
 class FreezyAutomationEngine:
     def __init__(self):
@@ -127,7 +165,7 @@ class FreezyAutomationEngine:
                         job_data = {
                             'title': job.get('position', 'Remote Job'),
                             'type': 'job',
-                            'description': job.get('description', 'Remote job opportunity - work from Pakistan'),
+                            'description': clean_html_content(job.get('description', 'Remote job opportunity - work from Pakistan')),
                             'location': 'Remote (Pakistan Friendly)',
                             'company': job.get('company', 'Remote Company'),
                             'source_url': job.get('url', 'https://remoteok.io'),
@@ -186,7 +224,7 @@ class FreezyAutomationEngine:
                         job_data = {
                             'title': job.get('position', 'Remote Job'),
                             'type': 'job',
-                            'description': job.get('description', 'Remote job opportunity worldwide'),
+                            'description': clean_html_content(job.get('description', 'Remote job opportunity worldwide')),
                             'location': 'Remote/Worldwide',
                             'company': job.get('company', 'Global Company'),
                             'source_url': job.get('url', 'https://remoteok.io'),
