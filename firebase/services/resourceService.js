@@ -478,64 +478,69 @@ export const deleteResource = async (resourceId) => {
   }
 }
 
-// Get resources with plan-based limits - USE SAME METHOD AS ADMIN
+// Import admin service to use exact same method
+import { getResources as getAdminResources } from './adminService'
+
+// Get resources with plan-based limits - USE EXACT SAME METHOD AS ADMIN
 export const getResourcesWithPlanLimits = async (userPlan = 'free', filters = {}) => {
   try {
     console.log(`🔍 Fetching resources for plan: ${userPlan}`)
 
     const planLimits = PLAN_LIMITS[userPlan] || PLAN_LIMITS.free
 
-    // Use the SAME query as admin panel (which works and shows 88 resources)
-    const q = query(
-      collection(db, 'resources'),
-      orderBy('created_at', 'desc')
-    )
+    // Use EXACT same method as admin panel (which gets all 88 resources)
+    console.log(`📊 Using admin service method to get ALL resources...`)
+    const adminResult = await getAdminResources()
 
-    const querySnapshot = await getDocs(q)
+    if (!adminResult.success) {
+      console.error('❌ Admin service failed:', adminResult.error)
+      return { success: false, error: adminResult.error }
+    }
+
+    const allRawResources = adminResult.data
+    console.log(`📊 Raw resources from admin service: ${allRawResources.length}`)
+
+    // Process resources same way as before
     const allResources = []
 
-    console.log(`📊 Raw documents from Firebase: ${querySnapshot.size}`)
-
-    querySnapshot.forEach((doc) => {
+    allRawResources.forEach((resource) => {
       try {
-        const data = doc.data()
-
         // Use SAME normalization as admin panel
         let normalizedResource = null
 
         // New structure (with metadata)
-        if (data.metadata && data.metadata.title) {
+        if (resource.metadata && resource.metadata.title) {
           normalizedResource = {
-            id: doc.id,
-            title: data.metadata.title,
-            description: data.metadata.description || 'No description',
-            type: data.metadata.type || 'job',
-            company: data.content?.company || '',
-            location: data.content?.location || '',
-            duration: data.content?.duration || '',
-            requirements: data.content?.requirements || '',
-            benefits: data.content?.benefits || '',
-            source_url: data.metadata.source_url || '',
-            created_at: data.metadata.created_at,
-            status: data.visibility?.status || data.status || 'active',
-            access_level: data.visibility?.access_level || 'free'
+            id: resource.id,
+            title: resource.metadata.title,
+            description: resource.metadata.description || 'No description',
+            type: resource.metadata.type || 'job',
+            company: resource.content?.company || '',
+            location: resource.content?.location || '',
+            duration: resource.content?.duration || '',
+            requirements: resource.content?.requirements || '',
+            benefits: resource.content?.benefits || '',
+            source_url: resource.metadata.source_url || '',
+            created_at: resource.metadata.created_at,
+            status: resource.visibility?.status || resource.status || 'active',
+            access_level: resource.visibility?.access_level || 'free'
           }
         }
         // Old structure (flat)
-        else if (data.title) {
+        else if (resource.title) {
           normalizedResource = {
-            id: doc.id,
-            title: data.title,
-            description: data.description || 'No description',
-            type: data.type || 'job',
-            company: data.company || '',
-            location: data.location || '',
-            duration: data.duration || '',
-            requirements: data.requirements || '',
-            benefits: data.benefits || '',
-            source_url: data.source_url || '',
-            created_at: data.created_at,
-            status: data.status || 'active',
+            id: resource.id,
+            title: resource.title,
+            description: resource.description || 'No description',
+            type: resource.type || 'job',
+            company: resource.company || '',
+            location: resource.location || '',
+            duration: resource.duration || '',
+            requirements: resource.requirements || '',
+            benefits: resource.benefits || '',
+            source_url: resource.source_url || '',
+            created_at: resource.created_at,
+            status: resource.status || 'active',
             access_level: 'free' // Default old resources to free
           }
         }
@@ -547,7 +552,7 @@ export const getResourcesWithPlanLimits = async (userPlan = 'free', filters = {}
           }
         }
       } catch (error) {
-        console.error(`Error processing resource ${doc.id}:`, error)
+        console.error(`Error processing resource ${resource.id}:`, error)
       }
     })
 
