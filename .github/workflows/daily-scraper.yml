@@ -1,77 +1,77 @@
-name: 🤖 Daily Resource Scraper
+name: "🤖 Daily Resource Scraper"
 
 on:
+  # 09:00 UTC = 14:00 PKT
   schedule:
-    # Run daily at 9:00 AM UTC (2:00 PM Pakistan Time)
-    - cron: '0 9 * * *'
-  
-  # Allow manual triggering
+    - cron: "0 9 * * *"
+
+  # Manual trigger
   workflow_dispatch:
     inputs:
       test_mode:
-        description: 'Run in test mode (limited resources)'
+        description: "Run in test mode (limited resources)"
         required: false
-        default: 'false'
+        default: "false"
         type: boolean
 
 jobs:
   scrape-resources:
     runs-on: ubuntu-latest
-    
-    steps:
-    - name: 📥 Checkout Repository
-      uses: actions/checkout@v4
-    
-    - name: 🐍 Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-    
-    - name: 📦 Install Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r scripts/requirements.txt
-    
-    - name: 🔑 Create Firebase Service Account File
-      run: |
-        echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > scripts/firebase-key.json
-    
-    - name: 🚀 Run Automation Scraper
-      env:
-        FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        TEST_MODE: ${{ github.event.inputs.test_mode }}
-      run: |
-        cd scripts
-        python auto_scraper.py
-    
-    - name: 🧹 Cleanup Sensitive Files
-      if: always()
-      run: |
-        rm -f scripts/firebase-key.json
-    
-    - name: 📊 Upload Logs (if failed)
-      if: failure()
-      uses: actions/upload-artifact@v3
-      with:
-        name: scraper-logs
-        path: scripts/*.log
-        retention-days: 7
 
-  # Notify on failure
+    steps:
+      - name: "📥 Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "🐍 Set up Python"
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: "📦 Install dependencies"
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r scripts/requirements.txt
+
+      - name: "🔑 Write Firebase service‑account key"
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > scripts/firebase-key.json
+
+      - name: "🚀 Run automation scraper"
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          DISCORD_WEBHOOK:        ${{ secrets.DISCORD_WEBHOOK }}
+          TEST_MODE:             ${{ github.event.inputs.test_mode }}
+        run: |
+          cd scripts
+          python auto_scraper.py
+
+      - name: "🧹 Remove sensitive key file"
+        if: always()
+        run: rm -f scripts/firebase-key.json
+
+      - name: "📊 Upload logs on failure"
+        if: failure()
+        uses: actions/upload-artifact@v4  # ← upgraded to v4 (v3 is deprecated)
+        with:
+          name: scraper-logs
+          path: scripts/*.log
+          retention-days: 7
+
   notify-failure:
     runs-on: ubuntu-latest
     needs: scrape-resources
     if: failure()
-    
+
     steps:
-    - name: 🚨 Send Failure Notification
-      run: |
-        curl -X POST "${{ secrets.DISCORD_WEBHOOK }}" \
-        -H "Content-Type: application/json" \
-        -d '{
-          "content": "🚨 **Freezy Platform Scraper Failed!**\n\n❌ The daily scraping job encountered an error.\n🔗 Check the logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\n\n⏰ Time: '"$(date)"'",
-          "username": "Freezy Alert Bot",
-          "avatar_url": "https://cdn-icons-png.flaticon.com/512/564/564619.png"
-        }'
+      - name: "🚨 Send Discord failure notification"
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          curl -s -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "content": "🚨 **Freezy Platform Scraper Failed!**\n\n❌ The daily scraping job encountered an error.\n🔗 Check the logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\n\n⏰ Time (UTC): $(date --utc +"%Y-%m-%d %H:%M:%S")",
+              "username": "Freezy Alert Bot",
+              "avatar_url": "https://cdn-icons-png.flaticon.com/512/564/564619.png"
+            }'
