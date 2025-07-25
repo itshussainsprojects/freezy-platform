@@ -545,23 +545,9 @@ export const getResourcesWithPlanLimits = async (userPlan = 'free', filters = {}
         }
 
         if (normalizedResource) {
-          // Only include active resources
+          // Only include active resources (REVERTED: removed access level filtering)
           if (!normalizedResource.status || normalizedResource.status === 'active') {
-            // Apply access level filtering based on user plan
-            const resourceAccessLevel = normalizedResource.access_level || 'free'
-            const planAccessLevels = {
-              free: ['free'],
-              pro: ['free', 'pro'],
-              enterprise: ['free', 'pro', 'enterprise']
-            }
-
-            const allowedLevels = planAccessLevels[userPlan] || ['free']
-
-            if (allowedLevels.includes(resourceAccessLevel)) {
-              allResources.push(normalizedResource)
-            } else {
-              console.log(`🔒 Resource ${normalizedResource.title} blocked - access level: ${resourceAccessLevel}, user plan: ${userPlan}`)
-            }
+            allResources.push(normalizedResource)
           }
         }
       } catch (error) {
