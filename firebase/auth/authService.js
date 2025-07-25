@@ -48,9 +48,9 @@ export const registerUser = async (userData) => {
       },
       subscription: {
         selected_plan: selectedPlan,
-        approval_status: 'pending', // All users require admin approval
-        approved_by: null,
-        approved_at: null,
+        approval_status: selectedPlan === 'free' ? 'approved' : 'pending', // Free plan auto-approved
+        approved_by: selectedPlan === 'free' ? 'system' : null,
+        approved_at: selectedPlan === 'free' ? serverTimestamp() : null,
         plan_expires_at: null
       },
       preferences: {

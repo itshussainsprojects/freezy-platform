@@ -20,9 +20,9 @@ const getDefaultUserData = (user) => ({
   },
   subscription: {
     selected_plan: 'free',
-    approval_status: 'pending', // Require admin approval
-    approved_by: null,
-    approved_at: null,
+    approval_status: 'approved', // Free plan auto-approved
+    approved_by: 'system',
+    approved_at: serverTimestamp(),
     plan_expires_at: null
   },
   preferences: {
@@ -92,6 +92,30 @@ export const ensureUserDocument = async (user) => {
       if (!existingData.subscription) {
         updates.subscription = defaultData.subscription
         needsUpdate = true
+      } else {
+        // Preserve existing subscription data, only add missing fields
+        const currentSubscription = existingData.subscription
+        const subscriptionUpdates = {}
+
+        if (!currentSubscription.selected_plan) {
+          subscriptionUpdates['subscription.selected_plan'] = 'free'
+        }
+        if (!currentSubscription.approval_status) {
+          // Default to approved for free plan, pending for others
+          const plan = currentSubscription.selected_plan || 'free'
+          subscriptionUpdates['subscription.approval_status'] = plan === 'free' ? 'approved' : 'pending'
+        }
+        if (!currentSubscription.approved_by && currentSubscription.approval_status === 'approved') {
+          subscriptionUpdates['subscription.approved_by'] = 'system'
+        }
+        if (!currentSubscription.approved_at && currentSubscription.approval_status === 'approved') {
+          subscriptionUpdates['subscription.approved_at'] = serverTimestamp()
+        }
+
+        if (Object.keys(subscriptionUpdates).length > 0) {
+          Object.assign(updates, subscriptionUpdates)
+          needsUpdate = true
+        }
       }
       
       // Update last login
@@ -229,6 +253,38 @@ export const fixUserDocument = async (userId) => {
     return { success: true, updated: false }
   } catch (error) {
     console.error('Error fixing user document:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+// Migration function to fix existing users with approval issues
+export const migrateUserApprovalStatus = async (userId) => {
+  try {
+    const userDocRef = doc(db, 'users', userId)
+    const userDoc = await getDoc(userDocRef)
+
+    if (!userDoc.exists()) {
+      return { success: false, error: 'User not found' }
+    }
+
+    const userData = userDoc.data()
+    const subscription = userData.subscription || {}
+
+    // Fix approval status for free plan users
+    if (subscription.selected_plan === 'free' && subscription.approval_status !== 'approved') {
+      await updateDoc(userDocRef, {
+        'subscription.approval_status': 'approved',
+        'subscription.approved_by': 'system_migration',
+        'subscription.approved_at': serverTimestamp()
+      })
+
+      console.log(`✅ Migrated free plan user to approved status: ${userData.profile?.email}`)
+      return { success: true, migrated: true }
+    }
+
+    return { success: true, migrated: false }
+  } catch (error) {
+    console.error('Error migrating user approval status:', error)
     return { success: false, error: error.message }
   }
 }

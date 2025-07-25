@@ -40,23 +40,62 @@ export const updateUserProfile = async (userId, profileData) => {
   }
 }
 
-// Update user subscription plan
+// Update user subscription plan with smart approval logic
 export const updateUserPlan = async (userId, planData) => {
   try {
     const userRef = doc(db, 'users', userId)
-    
+
+    // Get current user data to check existing approval status
+    const userDoc = await getDoc(userRef)
+    const currentData = userDoc.data()
+    const currentPlan = currentData?.subscription?.selected_plan || 'free'
+    const currentApprovalStatus = currentData?.subscription?.approval_status || 'pending'
+    const currentApprovedBy = currentData?.subscription?.approved_by
+    const currentApprovedAt = currentData?.subscription?.approved_at
+
+    // Smart approval logic
+    let newApprovalStatus = 'pending'
+    let approvedBy = null
+    let approvedAt = null
+
+    if (planData.plan === 'free') {
+      // Free plan is always approved
+      newApprovalStatus = 'approved'
+      approvedBy = 'system'
+      approvedAt = serverTimestamp()
+    } else if (currentApprovalStatus === 'approved' && currentApprovedBy) {
+      // If user was previously approved, keep approval for plan changes
+      // (Admin already verified this user)
+      newApprovalStatus = 'approved'
+      approvedBy = currentApprovedBy
+      approvedAt = currentApprovedAt || serverTimestamp()
+    } else {
+      // New paid plan for unapproved user
+      newApprovalStatus = 'pending'
+      approvedBy = null
+      approvedAt = null
+    }
+
     const updateData = {
       'subscription.selected_plan': planData.plan,
-      'subscription.approval_status': planData.plan === 'free' ? 'approved' : 'pending',
-      'subscription.approved_by': null,
-      'subscription.approved_at': planData.plan === 'free' ? serverTimestamp() : null
+      'subscription.approval_status': newApprovalStatus,
+      'subscription.approved_by': approvedBy,
+      'subscription.approved_at': approvedAt,
+      'subscription.plan_updated_at': serverTimestamp()
     }
-    
+
     await updateDoc(userRef, updateData)
-    
+
+    const message = planData.plan === 'free'
+      ? `Plan updated to ${planData.plan}.`
+      : newApprovalStatus === 'approved'
+        ? `Plan updated to ${planData.plan}. Access granted immediately.`
+        : `Plan updated to ${planData.plan}. Awaiting admin approval.`
+
     return {
       success: true,
-      message: `Plan updated to ${planData.plan}. ${planData.plan !== 'free' ? 'Awaiting admin approval.' : ''}`
+      message,
+      approval_status: newApprovalStatus
     }
   } catch (error) {
     console.error('Error updating plan:', error)

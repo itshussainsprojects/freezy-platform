@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User } from 'firebase/auth'
 import { onAuthStateChange, getCurrentUserData } from '../../firebase/auth/authService'
 import { checkAdminStatus } from '../../firebase/services/adminService'
-import { ensureUserDocument } from '../../firebase/services/userDocumentService'
+import { ensureUserDocument, migrateUserApprovalStatus } from '../../firebase/services/userDocumentService'
 
 interface UserData {
   id: string
@@ -76,6 +76,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         // First, ensure user document exists and has all required fields
         await ensureUserDocument(user)
+
+        // Run migration for existing users with approval issues
+        await migrateUserApprovalStatus(user.uid)
 
         // Get user data from Firestore
         const userDataResult = await getCurrentUserData(user.uid)
