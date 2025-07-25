@@ -32,11 +32,11 @@ const UpgradePrompt: React.FC<UpgradePromptProps> = ({
       icon: <Crown className="w-6 h-6" />,
       color: 'from-blue-500 to-purple-600',
       features: [
-        '200 total resources',
-        '80 job opportunities',
-        '60 free courses',
-        '60 development tools',
-        'Advanced filtering',
+        'Access to premium resources',
+        'Quality job opportunities',
+        'Professional courses',
+        'Advanced development tools',
+        'Enhanced filtering options',
         'Priority support'
       ],
       limits: {
@@ -53,13 +53,13 @@ const UpgradePrompt: React.FC<UpgradePromptProps> = ({
       icon: <Star className="w-6 h-6" />,
       color: 'from-purple-600 to-pink-600',
       features: [
-        'Unlimited resources',
-        'All job opportunities',
-        'All free courses',
-        'All development tools',
-        'Premium analytics',
-        'Direct admin contact',
-        'Custom integrations'
+        'Unlimited access to all resources',
+        'Exclusive premium job opportunities',
+        'Complete course library',
+        'Full development toolkit',
+        'Advanced analytics & insights',
+        'Direct admin support',
+        'Custom integrations & features'
       ],
       limits: {
         total: -1,
@@ -149,23 +149,23 @@ Thank you!`
             {/* Current Plan Status */}
             <div className="bg-gray-50 rounded-lg p-4 mb-6">
               <h3 className="font-semibold text-gray-800 mb-2">Your Current Plan: Free</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div className="text-center">
-                  <div className="font-bold text-2xl text-gray-600">{currentLimits.free.total}</div>
-                  <div className="text-gray-500">Total Resources</div>
-                </div>
-                <div className="text-center">
-                  <div className="font-bold text-2xl text-gray-600">{currentLimits.free.jobs}</div>
-                  <div className="text-gray-500">Jobs</div>
-                </div>
-                <div className="text-center">
-                  <div className="font-bold text-2xl text-gray-600">{currentLimits.free.courses}</div>
-                  <div className="text-gray-500">Courses</div>
-                </div>
-                <div className="text-center">
-                  <div className="font-bold text-2xl text-gray-600">{currentLimits.free.tools}</div>
-                  <div className="text-gray-500">Tools</div>
-                </div>
+              <p className="text-gray-600">
+                You're currently on our free plan with access to basic resources.
+                Upgrade to unlock premium job opportunities, advanced courses, and exclusive tools.
+              </p>
+              <div className="mt-3 flex items-center space-x-4 text-sm text-gray-500">
+                <span className="flex items-center">
+                  <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+                  Basic Resources
+                </span>
+                <span className="flex items-center">
+                  <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
+                  Community Support
+                </span>
+                <span className="flex items-center">
+                  <span className="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>
+                  Regular Updates
+                </span>
               </div>
             </div>
 

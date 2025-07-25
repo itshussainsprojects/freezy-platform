@@ -83,7 +83,14 @@ function ResourcesContent() {
       setLoading(true)
       console.log('🔄 Loading resources...')
 
-      // Always load resources, even without userData (for guest users)
+      // Check if user is logged in
+      if (!user) {
+        console.log('👤 No user logged in - showing login prompt')
+        setLoading(false)
+        return
+      }
+
+      // Load resources for logged-in users
       const userPlan = userData?.subscription?.selected_plan || 'free'
       const approvalStatus = userData?.subscription?.approval_status || 'approved'
 
@@ -382,8 +389,43 @@ function ResourcesContent() {
 
 
 
-        {/* Call to Action */}
-        {getTypeCount('all') === 0 && !loading && (
+        {/* Login Prompt for Non-Logged Users */}
+        {!user && !loading && (
+          <div className="text-center py-16">
+            <div className="max-w-md mx-auto">
+              <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
+                <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-4">Create Account to Access Resources</h3>
+              <p className="text-gray-600 mb-6">
+                Join thousands of professionals accessing premium job opportunities, courses, and tools.
+                Create your free account to get started!
+              </p>
+              <div className="space-y-3">
+                <a
+                  href="/auth/login"
+                  className="block w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  🚀 Create Free Account
+                </a>
+                <a
+                  href="/auth/login"
+                  className="block w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Already have an account? Sign In
+                </a>
+              </div>
+              <p className="text-sm text-gray-500 mt-4">
+                ✅ Free to join • ✅ Instant access • ✅ No credit card required
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Call to Action for Logged Users with No Resources */}
+        {user && getTypeCount('all') === 0 && !loading && (
           <div className="text-center py-12">
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No resources available yet</h3>
             <p className="text-gray-600 mb-4">
