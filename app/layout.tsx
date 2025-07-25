@@ -5,6 +5,7 @@ import "./globals.css"
 import Navigation from "./components/navigation"
 import { AuthProvider } from "./contexts/AuthContext"
 import AutoFixUserDocument from "./components/AutoFixUserDocument"
+import { FloatingWhatsApp } from "./components/WhatsAppSupport"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -26,6 +27,7 @@ export default function RootLayout({
           <AutoFixUserDocument />
           <Navigation />
           <main className="min-h-screen">{children}</main>
+          <FloatingWhatsApp />
         </AuthProvider>
       </body>
     </html>

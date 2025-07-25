@@ -68,29 +68,61 @@ export const addResource = async (resourceData) => {
   }
 }
 
-// Get resources with filtering and pagination
-export const getResources = async (filters = {}, lastDoc = null, limitCount = 20) => {
+// Plan-based resource limits
+const PLAN_LIMITS = {
+  free: {
+    total: 40,
+    jobs: 10,
+    courses: 15,
+    tools: 15
+  },
+  pro: {
+    total: 200,
+    jobs: 80,
+    courses: 60,
+    tools: 60
+  },
+  enterprise: {
+    total: -1, // unlimited
+    jobs: -1,
+    courses: -1,
+    tools: -1
+  }
+}
+
+// Get resources with plan-based limits and filtering
+export const getResources = async (filters = {}, lastDoc = null, limitCount = 20, userPlan = 'free') => {
   try {
     let q = collection(db, 'resources')
-    
+
     // Apply filters
     const constraints = [where('visibility.status', '==', 'active')]
-    
+
     if (filters.type) {
       constraints.push(where('metadata.type', '==', filters.type))
     }
-    
+
     if (filters.category) {
       constraints.push(where('metadata.category', '==', filters.category))
     }
-    
+
     if (filters.accessLevel) {
       constraints.push(where('visibility.access_level', '==', filters.accessLevel))
     }
-    
+
     if (filters.featured) {
       constraints.push(where('visibility.is_featured', '==', true))
     }
+
+    // Apply plan-based access level filtering
+    const planAccessLevels = {
+      free: ['demo', 'free'],
+      pro: ['demo', 'free', 'pro'],
+      enterprise: ['demo', 'free', 'pro', 'enterprise']
+    }
+
+    const allowedLevels = planAccessLevels[userPlan] || ['demo']
+    constraints.push(where('visibility.access_level', 'in', allowedLevels))
     
     // Add ordering
     const orderField = filters.sortBy || 'visibility.priority_score'
@@ -364,13 +396,97 @@ export const batchUpdateResources = async (updates) => {
 export const deleteResource = async (resourceId) => {
   try {
     await deleteDoc(doc(db, 'resources', resourceId))
-    
+
     return {
       success: true,
       message: 'Resource deleted successfully'
     }
   } catch (error) {
     console.error('Error deleting resource:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+}
+
+// Get resources with plan-based limits
+export const getResourcesWithPlanLimits = async (userPlan = 'free', filters = {}) => {
+  try {
+    const planLimits = PLAN_LIMITS[userPlan] || PLAN_LIMITS.free
+    const results = {
+      jobs: [],
+      courses: [],
+      tools: [],
+      hasMore: {
+        jobs: false,
+        courses: false,
+        tools: false
+      },
+      limits: planLimits,
+      totalShown: 0,
+      totalAvailable: 0
+    }
+
+    // Get each type of resource with limits
+    const types = ['job', 'course', 'tool']
+
+    for (const type of types) {
+      const typeLimit = planLimits[type + 's'] // jobs, courses, tools
+
+      if (typeLimit === -1) {
+        // Unlimited for enterprise
+        const typeFilters = { ...filters, type }
+        const response = await getResources(typeFilters, null, 1000, userPlan)
+
+        if (response.success) {
+          results[type + 's'] = response.data
+          results.totalShown += response.data.length
+          results.totalAvailable += response.data.length
+        }
+      } else {
+        // Limited for free/pro plans
+        const typeFilters = { ...filters, type }
+        const response = await getResources(typeFilters, null, typeLimit + 50, userPlan) // Get extra to check if more available
+
+        if (response.success) {
+          const resources = response.data
+          results[type + 's'] = resources.slice(0, typeLimit)
+          results.hasMore[type + 's'] = resources.length > typeLimit
+          results.totalShown += Math.min(resources.length, typeLimit)
+          results.totalAvailable += resources.length
+        }
+      }
+    }
+
+    return {
+      success: true,
+      data: results
+    }
+  } catch (error) {
+    console.error('Error getting resources with plan limits:', error)
+    return {
+      success: false,
+      error: error.message
+    }
+  }
+}
+
+// Check if user has reached plan limits
+export const checkPlanLimits = async (userPlan = 'free') => {
+  try {
+    const planLimits = PLAN_LIMITS[userPlan] || PLAN_LIMITS.free
+
+    return {
+      success: true,
+      data: {
+        limits: planLimits,
+        isUnlimited: userPlan === 'enterprise',
+        planName: userPlan.charAt(0).toUpperCase() + userPlan.slice(1)
+      }
+    }
+  } catch (error) {
+    console.error('Error checking plan limits:', error)
     return {
       success: false,
       error: error.message

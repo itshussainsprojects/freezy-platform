@@ -1,66 +1,90 @@
+'use client'
+
 import Link from "next/link"
 import { Check, Star, Zap, Crown } from "lucide-react"
+import { useState } from "react"
+import UpgradePrompt from "../components/UpgradePrompt"
+import { useAuth } from "../contexts/AuthContext"
 
 export default function PricingPage() {
+  const { user, userData } = useAuth()
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState<'pro' | 'enterprise'>('pro')
+
   const plans = [
     {
       name: "Free Plan",
-      price: "$0",
-      period: "/month",
+      price: "Free",
+      period: "",
       description: "Perfect for getting started with basic resources",
       icon: Star,
       features: [
-        "Access to 1,000+ free courses",
-        "Basic job listings",
-        "5 tool downloads per month",
+        "40 total resources",
+        "10 job opportunities",
+        "15 free courses",
+        "15 development tools",
+        "Basic filtering",
         "Community support",
-        "Email notifications",
       ],
       buttonText: "Get Started Free",
       buttonStyle: "bg-gray-800 text-white hover:bg-gray-700",
       popular: false,
+      planKey: 'free'
     },
     {
       name: "Pro Plan",
-      price: "$10",
+      price: "200 PKR",
       period: "/month",
-      description: "Unlock premium features and unlimited access",
+      description: "Unlock premium features and more resources",
       icon: Zap,
       features: [
-        "Access to ALL courses & resources",
-        "Premium job opportunities",
-        "Unlimited tool downloads",
+        "200 total resources",
+        "80 job opportunities",
+        "60 premium courses",
+        "60 development tools",
+        "Advanced filtering",
         "Priority support",
-        "Advanced search filters",
-        "Personalized recommendations",
-        "Offline access",
-        "Certificate tracking",
+        "Daily fresh content",
+        "JazzCash payment",
       ],
-      buttonText: "Start Pro Trial",
+      buttonText: "Upgrade to Pro",
       buttonStyle: "bg-freezy-gradient text-white hover:bg-freezy-gradient-hover",
       popular: true,
+      planKey: 'pro'
     },
     {
       name: "Enterprise Plan",
-      price: "Custom",
-      period: "",
-      description: "Tailored solutions for teams and organizations",
+      price: "400 PKR",
+      period: "/month",
+      description: "Unlimited access for serious professionals",
       icon: Crown,
       features: [
-        "Everything in Pro Plan",
-        "Team management dashboard",
+        "Unlimited resources",
+        "All job opportunities",
+        "All premium courses",
+        "All development tools",
+        "Premium analytics",
+        "Direct admin contact",
         "Custom integrations",
-        "Dedicated account manager",
-        "Advanced analytics",
-        "White-label options",
-        "API access",
-        "Custom training programs",
+        "WhatsApp support",
       ],
-      buttonText: "Contact Sales",
+      buttonText: "Upgrade to Enterprise",
       buttonStyle: "bg-gray-800 text-white hover:bg-gray-700",
       popular: false,
+      planKey: 'enterprise'
     },
   ]
+
+  const handlePlanSelect = (planKey: string) => {
+    if (planKey === 'free') {
+      // Redirect to signup for free plan
+      window.location.href = '/auth/signup'
+    } else {
+      // Show upgrade modal for paid plans
+      setSelectedPlan(planKey as 'pro' | 'enterprise')
+      setShowUpgradeModal(true)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-20 px-4">
@@ -118,12 +142,12 @@ export default function PricingPage() {
                   </ul>
 
                   {/* CTA Button */}
-                  <Link
-                    href={plan.name === "Enterprise Plan" ? "/contact" : "/portal"}
-                    className={`w-full block text-center py-4 px-6 rounded-full font-semibold transition-all duration-300 transform hover:scale-105 ${plan.buttonStyle}`}
+                  <button
+                    onClick={() => handlePlanSelect(plan.planKey)}
+                    className={`w-full py-4 px-6 rounded-full font-semibold transition-all duration-300 transform hover:scale-105 ${plan.buttonStyle}`}
                   >
                     {plan.buttonText}
-                  </Link>
+                  </button>
                 </div>
               </div>
             )
@@ -149,12 +173,28 @@ export default function PricingPage() {
             <div className="bg-white rounded-xl p-6 shadow-md">
               <h3 className="font-semibold mb-2">What payment methods do you accept?</h3>
               <p className="text-gray-600">
-                We accept all major credit cards, PayPal, and bank transfers for Enterprise plans.
+                We accept JazzCash payments for Pakistani users. Simple and secure payment process.
+              </p>
+            </div>
+            <div className="bg-white rounded-xl p-6 shadow-md">
+              <h3 className="font-semibold mb-2">How do I get approved after payment?</h3>
+              <p className="text-gray-600">
+                After payment, send a screenshot via WhatsApp to +92 3225750871. You'll be approved within 24 hours.
               </p>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Upgrade Modal */}
+      {showUpgradeModal && (
+        <UpgradePrompt
+          currentPlan={userData?.subscription?.selected_plan || 'free'}
+          resourceType="resources"
+          onClose={() => setShowUpgradeModal(false)}
+          showModal={true}
+        />
+      )}
     </div>
   )
 }

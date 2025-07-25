@@ -6,7 +6,10 @@ import { useAuth } from '../contexts/AuthContext'
 import ResourceCard from '../components/ResourceCard'
 import { getSavedResources } from '../../firebase/services/userActivityService'
 import { getResources } from '../../firebase/services/adminService'
+import { getResourcesWithPlanLimits, checkPlanLimits } from '../../firebase/services/resourceService'
 import { ToastContainer, useToast } from '../components/Toast'
+import ShowMorePrompt from '../components/ShowMorePrompt'
+import UpgradePrompt from '../components/UpgradePrompt'
 import {
   Search,
   Filter,
@@ -17,14 +20,16 @@ import {
 } from 'lucide-react'
 
 function ResourcesContent() {
-  const { user } = useAuth()
+  const { user, userData } = useAuth()
   const { toasts, removeToast } = useToast()
   const searchParams = useSearchParams()
   const [resources, setResources] = useState([])
+  const [planData, setPlanData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedType, setSelectedType] = useState('all')
   const [savedResources, setSavedResources] = useState(new Set())
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
 
   useEffect(() => {
     loadResources()
@@ -55,31 +60,55 @@ function ResourcesContent() {
   const loadResources = async () => {
     try {
       setLoading(true)
-      const result = await getResources()
+
+      if (!userData) {
+        setLoading(false)
+        return
+      }
+
+      const userPlan = userData.subscription?.selected_plan || 'free'
+      const approvalStatus = userData.subscription?.approval_status || 'pending'
+
+      // If user is not approved, show upgrade prompt
+      if (approvalStatus !== 'approved' && userPlan !== 'free') {
+        setShowUpgradePrompt(true)
+        setLoading(false)
+        return
+      }
+
+      // Get resources with plan limits
+      const result = await getResourcesWithPlanLimits(userPlan, {})
+
       if (result.success) {
-        // Only show active resources to users
-        const activeResources = result.data.filter(resource => resource.status === 'active')
-        setResources(activeResources)
+        setResources(result.data)
+        setPlanData(result.data)
       } else {
         console.error('Error loading resources:', result.error)
-        setResources([])
+        setResources({ jobs: [], courses: [], tools: [], hasMore: {}, limits: {} })
       }
     } catch (error) {
       console.error('Error loading resources:', error)
-      setResources([])
+      setResources({ jobs: [], courses: [], tools: [], hasMore: {}, limits: {} })
     } finally {
       setLoading(false)
     }
   }
 
+  // Get all resources for filtering
+  const allResources = resources.jobs ? [
+    ...resources.jobs,
+    ...resources.courses,
+    ...resources.tools
+  ] : []
+
   // Filter resources based on search term and type
-  const filteredResources = resources.filter(resource => {
-    const matchesSearch = resource.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         resource.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  const filteredResources = allResources.filter(resource => {
+    const matchesSearch = resource.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         resource.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (resource.company && resource.company.toLowerCase().includes(searchTerm.toLowerCase()))
-    
+
     const matchesType = selectedType === 'all' || resource.type === selectedType
-    
+
     return matchesSearch && matchesType
   })
 
@@ -93,8 +122,24 @@ function ResourcesContent() {
   }
 
   const getTypeCount = (type) => {
-    if (type === 'all') return resources.length
-    return resources.filter(r => r.type === type).length
+    if (!resources.jobs) return 0
+
+    switch (type) {
+      case 'all': return resources.jobs.length + resources.courses.length + resources.tools.length
+      case 'job': return resources.jobs.length
+      case 'course': return resources.courses.length
+      case 'tool': return resources.tools.length
+      default: return 0
+    }
+  }
+
+  const getNextPlanInfo = (currentPlan) => {
+    if (currentPlan === 'free') {
+      return { name: 'Pro', price: '200 PKR', limit: 200 }
+    } else if (currentPlan === 'pro') {
+      return { name: 'Enterprise', price: '400 PKR', limit: -1 }
+    }
+    return null
   }
 
   if (loading) {
@@ -174,26 +219,72 @@ function ResourcesContent() {
 
         {/* Resources Grid */}
         {filteredResources.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredResources.map((resource) => (
-              <ResourceCard
-                key={resource.id}
-                resource={resource}
-                isSaved={savedResources.has(resource.id)}
-                onSaveToggle={(resourceId, isSaved) => {
-                  if (isSaved) {
-                    setSavedResources(prev => new Set([...prev, resourceId]))
-                  } else {
-                    setSavedResources(prev => {
-                      const newSet = new Set(prev)
-                      newSet.delete(resourceId)
-                      return newSet
-                    })
-                  }
-                }}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+              {filteredResources.map((resource) => (
+                <ResourceCard
+                  key={resource.id}
+                  resource={resource}
+                  isSaved={savedResources.has(resource.id)}
+                  onSaveToggle={(resourceId, isSaved) => {
+                    if (isSaved) {
+                      setSavedResources(prev => new Set([...prev, resourceId]))
+                    } else {
+                      setSavedResources(prev => {
+                        const newSet = new Set(prev)
+                        newSet.delete(resourceId)
+                        return newSet
+                      })
+                    }
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Show More Prompts for each resource type */}
+            {userData && resources.hasMore && (
+              <div className="space-y-8">
+                {/* Jobs Show More */}
+                {resources.hasMore.jobs && selectedType === 'all' || selectedType === 'job' && (
+                  <ShowMorePrompt
+                    resourceType="jobs"
+                    currentPlan={userData.subscription?.selected_plan || 'free'}
+                    currentCount={resources.jobs.length}
+                    totalAvailable={resources.totalAvailable || resources.jobs.length + 50}
+                    nextPlanLimit={getNextPlanInfo(userData.subscription?.selected_plan || 'free')?.limit || 200}
+                    nextPlanName={getNextPlanInfo(userData.subscription?.selected_plan || 'free')?.name || 'Pro'}
+                    nextPlanPrice={getNextPlanInfo(userData.subscription?.selected_plan || 'free')?.price || '200 PKR'}
+                  />
+                )}
+
+                {/* Courses Show More */}
+                {resources.hasMore.courses && (selectedType === 'all' || selectedType === 'course') && (
+                  <ShowMorePrompt
+                    resourceType="courses"
+                    currentPlan={userData.subscription?.selected_plan || 'free'}
+                    currentCount={resources.courses.length}
+                    totalAvailable={resources.totalAvailable || resources.courses.length + 50}
+                    nextPlanLimit={getNextPlanInfo(userData.subscription?.selected_plan || 'free')?.limit || 200}
+                    nextPlanName={getNextPlanInfo(userData.subscription?.selected_plan || 'free')?.name || 'Pro'}
+                    nextPlanPrice={getNextPlanInfo(userData.subscription?.selected_plan || 'free')?.price || '200 PKR'}
+                  />
+                )}
+
+                {/* Tools Show More */}
+                {resources.hasMore.tools && (selectedType === 'all' || selectedType === 'tool') && (
+                  <ShowMorePrompt
+                    resourceType="tools"
+                    currentPlan={userData.subscription?.selected_plan || 'free'}
+                    currentCount={resources.tools.length}
+                    totalAvailable={resources.totalAvailable || resources.tools.length + 50}
+                    nextPlanLimit={getNextPlanInfo(userData.subscription?.selected_plan || 'free')?.limit || 200}
+                    nextPlanName={getNextPlanInfo(userData.subscription?.selected_plan || 'free')?.name || 'Pro'}
+                    nextPlanPrice={getNextPlanInfo(userData.subscription?.selected_plan || 'free')?.price || '200 PKR'}
+                  />
+                )}
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-12">
             <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -231,6 +322,16 @@ function ResourcesContent() {
 
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+      {/* Upgrade Prompt Modal */}
+      {showUpgradePrompt && userData && (
+        <UpgradePrompt
+          currentPlan={userData.subscription?.selected_plan || 'free'}
+          resourceType="resources"
+          onClose={() => setShowUpgradePrompt(false)}
+          showModal={true}
+        />
+      )}
     </div>
   )
 }

@@ -490,15 +490,48 @@ class FreezyAutomationEngine:
         print(f"🛠️ Found {len(tools)} free tools")
         return tools
 
+    def assign_access_level(self, resource, resource_index, total_resources):
+        """Assign access level based on resource quality and plan distribution"""
+        # Distribute resources across plans:
+        # Free: First 40% of resources (basic/demo content)
+        # Pro: Next 40% of resources (quality content)
+        # Enterprise: Last 20% of resources (premium content)
+
+        percentage = (resource_index / total_resources) * 100
+
+        # High-quality indicators
+        quality_keywords = ['senior', 'lead', 'manager', 'director', 'architect', 'expert', 'advanced', 'premium', 'certified', 'principal']
+        has_quality_keywords = any(keyword in resource['title'].lower() for keyword in quality_keywords)
+
+        # Company quality indicators
+        quality_companies = ['google', 'microsoft', 'apple', 'amazon', 'meta', 'netflix', 'uber', 'airbnb', 'stripe', 'shopify']
+        has_quality_company = any(company in resource.get('company', '').lower() for company in quality_companies)
+
+        # Remote/worldwide jobs are more valuable
+        is_remote = 'remote' in resource.get('location', '').lower() or 'worldwide' in resource.get('location', '').lower()
+
+        if percentage <= 40:
+            # First 40% - Free tier
+            return 'free'
+        elif percentage <= 80:
+            # Next 40% - Pro tier
+            if has_quality_keywords or has_quality_company or is_remote:
+                return 'pro'
+            else:
+                return 'free'  # Keep some in free if not high quality
+        else:
+            # Last 20% - Enterprise tier
+            return 'enterprise'
+
     def save_to_firebase(self, resources):
-        """Save resources to your existing Firebase database"""
+        """Save resources to your existing Firebase database with access level assignment"""
         saved_count = 0
         duplicate_count = 0
         error_count = 0
 
         print(f"💾 Saving {len(resources)} resources to Firebase...")
 
-        for resource in resources:
+        for index, resource in enumerate(resources):
             try:
                 # Check if resource already exists (avoid duplicates)
                 existing_query = self.db.collection('resources').where(
@@ -508,10 +541,56 @@ class FreezyAutomationEngine:
                 existing_docs = existing_query.get()
 
                 if len(existing_docs) == 0:
+                    # Assign access level based on quality and distribution
+                    access_level = self.assign_access_level(resource, index, len(resources))
+
+                    # Create properly structured resource document
+                    resource_doc = {
+                        'metadata': {
+                            'title': resource['title'],
+                            'description': resource['description'],
+                            'type': resource['type'],
+                            'category': resource.get('category', 'General'),
+                            'tags': resource.get('tags', []),
+                            'source_url': resource.get('source_url', ''),
+                            'created_at': resource.get('created_at', datetime.now()),
+                            'updated_at': datetime.now()
+                        },
+                        'content': {
+                            'company': resource.get('company', ''),
+                            'location': resource.get('location', ''),
+                            'duration': resource.get('duration', ''),
+                            'requirements': resource.get('requirements', ''),
+                            'benefits': resource.get('benefits', ''),
+                            'salary_range': resource.get('salary_range', ''),
+                            'application_deadline': resource.get('application_deadline', ''),
+                            'contact_info': resource.get('contact_info', {})
+                        },
+                        'visibility': {
+                            'status': 'active',
+                            'access_level': access_level,
+                            'is_featured': access_level == 'enterprise',  # Enterprise resources are featured
+                            'priority_score': 100 if access_level == 'enterprise' else (80 if access_level == 'pro' else 60)
+                        },
+                        'analytics': {
+                            'view_count': 0,
+                            'save_count': 0,
+                            'application_count': 0,
+                            'last_updated': datetime.now()
+                        },
+                        'admin': {
+                            'created_by': resource.get('created_by', 'auto_scraper'),
+                            'approved_by': 'auto_scraper',
+                            'approval_date': datetime.now(),
+                            'scraped_from': resource.get('scraped_from', 'automated'),
+                            'location_type': resource.get('location_type', 'General')
+                        }
+                    }
+
                     # Resource doesn't exist, add it
-                    doc_ref = self.db.collection('resources').add(resource)
+                    doc_ref = self.db.collection('resources').add(resource_doc)
                     saved_count += 1
-                    print(f"✅ Saved: {resource['title']}")
+                    print(f"✅ Saved ({access_level}): {resource['title']}")
                 else:
                     duplicate_count += 1
                     print(f"⏭️  Skipped duplicate: {resource['title']}")
