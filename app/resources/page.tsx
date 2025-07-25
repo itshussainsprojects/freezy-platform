@@ -88,13 +88,10 @@ function ResourcesContent() {
       const approvalStatus = userData?.subscription?.approval_status || 'approved'
 
       console.log(`👤 User plan: ${userPlan}, approval: ${approvalStatus}`)
-      console.log(`👤 Full userData:`, userData)
-      console.log(`👤 Subscription data:`, userData?.subscription)
 
-      // Get resources with plan limits - FORCE ENTERPRISE FOR TESTING
-      const testPlan = 'enterprise' // Force enterprise to see all resources
-      console.log(`📊 Fetching resources for ${testPlan} plan (forced for testing)...`)
-      const result = await getResourcesWithPlanLimits(testPlan, {})
+      // Get resources with plan limits - back to normal user plan
+      console.log(`📊 Fetching resources for ${userPlan} plan...`)
+      const result = await getResourcesWithPlanLimits(userPlan, {})
 
       if (result.success && result.data) {
         console.log('✅ Resources loaded successfully')

@@ -68,13 +68,13 @@ export const addResource = async (resourceData) => {
   }
 }
 
-// Plan-based resource limits - TEMPORARILY INCREASED FOR DEBUGGING
+// Plan-based resource limits - BACK TO BUSINESS MODEL
 const PLAN_LIMITS = {
   free: {
-    total: 100, // Increased from 40 to see more resources
-    jobs: 50,   // Increased from 10
-    courses: 30, // Increased from 15
-    tools: 20   // Increased from 15
+    total: 40,
+    jobs: 10,
+    courses: 15,
+    tools: 15
   },
   pro: {
     total: 200,
@@ -488,14 +488,7 @@ export const getResourcesWithPlanLimits = async (userPlan = 'free', filters = {}
 
     const planLimits = PLAN_LIMITS[userPlan] || PLAN_LIMITS.free
 
-    // FIRST: Test direct collection query to see total documents
-    console.log(`📊 Testing direct collection query...`)
-    const directQuery = query(collection(db, 'resources'))
-    const directSnapshot = await getDocs(directQuery)
-    console.log(`📊 DIRECT QUERY: Found ${directSnapshot.size} total documents in collection`)
-
-    // SECOND: Use admin service method
-    console.log(`📊 Using admin service method to get ALL resources...`)
+    // Use admin service method to get ALL resources (fixed orderBy issue)
     const adminResult = await getAdminResources()
 
     if (!adminResult.success) {
@@ -504,7 +497,7 @@ export const getResourcesWithPlanLimits = async (userPlan = 'free', filters = {}
     }
 
     const allRawResources = adminResult.data
-    console.log(`📊 Raw resources from admin service: ${allRawResources.length}`)
+    console.log(`📊 Retrieved ${allRawResources.length} total resources`)
 
     // Process resources same way as before
     const allResources = []
