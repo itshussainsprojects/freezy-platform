@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation'
 import { useAuth } from '../contexts/AuthContext'
 import ResourceCard from '../components/ResourceCard'
 import { getSavedResources } from '../../firebase/services/userActivityService'
-import { getResources } from '../../firebase/services/adminService'
 import { getResourcesWithPlanLimits, checkPlanLimits } from '../../firebase/services/resourceService'
 import { ToastContainer, useToast } from '../components/Toast'
 import ShowMorePrompt from '../components/ShowMorePrompt'
@@ -94,11 +93,48 @@ function ResourcesContent() {
     }
   }
 
+  // Helper function to normalize resource data (handle both old and new structures)
+  const normalizeResource = (resource) => {
+    // New structure (with metadata, content, etc.)
+    if (resource.metadata) {
+      return {
+        id: resource.id,
+        title: resource.metadata.title,
+        description: resource.metadata.description,
+        type: resource.metadata.type,
+        company: resource.content?.company || '',
+        location: resource.content?.location || '',
+        duration: resource.content?.duration || '',
+        requirements: resource.content?.requirements || '',
+        benefits: resource.content?.benefits || '',
+        source_url: resource.metadata.source_url || '',
+        created_at: resource.metadata.created_at,
+        status: resource.visibility?.status || 'active'
+      }
+    }
+
+    // Old structure (flat)
+    return {
+      id: resource.id,
+      title: resource.title,
+      description: resource.description,
+      type: resource.type,
+      company: resource.company || '',
+      location: resource.location || '',
+      duration: resource.duration || '',
+      requirements: resource.requirements || '',
+      benefits: resource.benefits || '',
+      source_url: resource.source_url || '',
+      created_at: resource.created_at,
+      status: resource.status || 'active'
+    }
+  }
+
   // Get all resources for filtering
   const allResources = resources.jobs ? [
-    ...resources.jobs,
-    ...resources.courses,
-    ...resources.tools
+    ...resources.jobs.map(normalizeResource),
+    ...resources.courses.map(normalizeResource),
+    ...resources.tools.map(normalizeResource)
   ] : []
 
   // Filter resources based on search term and type

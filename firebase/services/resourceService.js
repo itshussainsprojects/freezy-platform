@@ -90,29 +90,63 @@ const PLAN_LIMITS = {
   }
 }
 
+// Helper function to normalize resource data (handle both old and new structures)
+const normalizeResource = (doc) => {
+  const data = doc.data()
+
+  // New structure (with metadata, content, etc.)
+  if (data.metadata) {
+    return {
+      id: doc.id,
+      title: data.metadata.title,
+      description: data.metadata.description,
+      type: data.metadata.type,
+      company: data.content?.company || '',
+      location: data.content?.location || '',
+      duration: data.content?.duration || '',
+      requirements: data.content?.requirements || '',
+      benefits: data.content?.benefits || '',
+      source_url: data.metadata.source_url || '',
+      created_at: data.metadata.created_at,
+      status: data.visibility?.status || 'active',
+      access_level: data.visibility?.access_level || 'free'
+    }
+  }
+
+  // Old structure (flat) - assign default access level
+  return {
+    id: doc.id,
+    title: data.title,
+    description: data.description,
+    type: data.type,
+    company: data.company || '',
+    location: data.location || '',
+    duration: data.duration || '',
+    requirements: data.requirements || '',
+    benefits: data.benefits || '',
+    source_url: data.source_url || '',
+    created_at: data.created_at,
+    status: data.status || 'active',
+    access_level: 'free' // Default old resources to free tier
+  }
+}
+
 // Get resources with plan-based limits and filtering
 export const getResources = async (filters = {}, lastDoc = null, limitCount = 20, userPlan = 'free') => {
   try {
+    // Get all resources first, then filter in JavaScript to handle both old and new structures
     let q = collection(db, 'resources')
 
-    // Apply filters
-    const constraints = [where('visibility.status', '==', 'active')]
+    // Basic ordering by created_at (works for both structures)
+    q = query(q, orderBy('created_at', 'desc'), limit(limitCount * 3)) // Get more to account for filtering
 
-    if (filters.type) {
-      constraints.push(where('metadata.type', '==', filters.type))
-    }
+    const querySnapshot = await getDocs(q)
+    const allResources = []
 
-    if (filters.category) {
-      constraints.push(where('metadata.category', '==', filters.category))
-    }
-
-    if (filters.accessLevel) {
-      constraints.push(where('visibility.access_level', '==', filters.accessLevel))
-    }
-
-    if (filters.featured) {
-      constraints.push(where('visibility.is_featured', '==', true))
-    }
+    querySnapshot.forEach((doc) => {
+      const normalizedResource = normalizeResource(doc)
+      allResources.push(normalizedResource)
+    })
 
     // Apply plan-based access level filtering
     const planAccessLevels = {
@@ -122,39 +156,32 @@ export const getResources = async (filters = {}, lastDoc = null, limitCount = 20
     }
 
     const allowedLevels = planAccessLevels[userPlan] || ['demo']
-    constraints.push(where('visibility.access_level', 'in', allowedLevels))
-    
-    // Add ordering
-    const orderField = filters.sortBy || 'visibility.priority_score'
-    const orderDirection = filters.sortOrder || 'desc'
-    constraints.push(orderBy(orderField, orderDirection))
-    
-    // Add limit
-    constraints.push(limit(limitCount))
-    
-    // Create query
-    q = query(q, ...constraints)
-    
-    // Add pagination
-    if (lastDoc) {
-      q = query(q, startAfter(lastDoc))
-    }
-    
-    const querySnapshot = await getDocs(q)
-    const resources = []
-    
-    querySnapshot.forEach((doc) => {
-      resources.push({
-        id: doc.id,
-        ...doc.data()
-      })
+
+    // Filter resources based on plan access and other criteria
+    let filteredResources = allResources.filter(resource => {
+      // Check if resource is active
+      if (resource.status !== 'active') return false
+
+      // Check access level
+      if (!allowedLevels.includes(resource.access_level)) return false
+
+      // Apply type filter
+      if (filters.type && resource.type !== filters.type) return false
+
+      // Apply category filter
+      if (filters.category && resource.category !== filters.category) return false
+
+      return true
     })
-    
+
+    // Limit results
+    filteredResources = filteredResources.slice(0, limitCount)
+
     return {
       success: true,
-      data: resources,
+      data: filteredResources,
       lastDoc: querySnapshot.docs[querySnapshot.docs.length - 1],
-      hasMore: querySnapshot.docs.length === limitCount
+      hasMore: allResources.length > limitCount
     }
   } catch (error) {
     console.error('Error fetching resources:', error)
