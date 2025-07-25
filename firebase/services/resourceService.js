@@ -92,61 +92,89 @@ const PLAN_LIMITS = {
 
 // Helper function to normalize resource data (handle both old and new structures)
 const normalizeResource = (doc) => {
-  const data = doc.data()
+  try {
+    const data = doc.data()
 
-  // New structure (with metadata, content, etc.)
-  if (data.metadata) {
-    return {
-      id: doc.id,
-      title: data.metadata.title,
-      description: data.metadata.description,
-      type: data.metadata.type,
-      company: data.content?.company || '',
-      location: data.content?.location || '',
-      duration: data.content?.duration || '',
-      requirements: data.content?.requirements || '',
-      benefits: data.content?.benefits || '',
-      source_url: data.metadata.source_url || '',
-      created_at: data.metadata.created_at,
-      status: data.visibility?.status || 'active',
-      access_level: data.visibility?.access_level || 'free'
+    if (!data) {
+      console.warn(`Document ${doc.id} has no data`)
+      return null
     }
-  }
 
-  // Old structure (flat) - assign default access level
-  return {
-    id: doc.id,
-    title: data.title,
-    description: data.description,
-    type: data.type,
-    company: data.company || '',
-    location: data.location || '',
-    duration: data.duration || '',
-    requirements: data.requirements || '',
-    benefits: data.benefits || '',
-    source_url: data.source_url || '',
-    created_at: data.created_at,
-    status: data.status || 'active',
-    access_level: 'free' // Default old resources to free tier
+    // New structure (with metadata, content, etc.)
+    if (data.metadata && data.metadata.title) {
+      return {
+        id: doc.id,
+        title: data.metadata.title || 'Untitled',
+        description: data.metadata.description || 'No description available',
+        type: data.metadata.type || 'job',
+        company: data.content?.company || 'Company',
+        location: data.content?.location || 'Location not specified',
+        duration: data.content?.duration || '',
+        requirements: data.content?.requirements || '',
+        benefits: data.content?.benefits || '',
+        source_url: data.metadata.source_url || '',
+        created_at: data.metadata.created_at,
+        status: data.visibility?.status || 'active',
+        access_level: data.visibility?.access_level || 'free'
+      }
+    }
+
+    // Old structure (flat) - assign default access level
+    if (data.title) {
+      return {
+        id: doc.id,
+        title: data.title || 'Untitled',
+        description: data.description || 'No description available',
+        type: data.type || 'job',
+        company: data.company || 'Company',
+        location: data.location || 'Location not specified',
+        duration: data.duration || '',
+        requirements: data.requirements || '',
+        benefits: data.benefits || '',
+        source_url: data.source_url || '',
+        created_at: data.created_at,
+        status: data.status || 'active',
+        access_level: 'free' // Default old resources to free tier
+      }
+    }
+
+    console.warn(`Document ${doc.id} has invalid structure:`, data)
+    return null
+
+  } catch (error) {
+    console.error(`Error normalizing document ${doc.id}:`, error)
+    return null
   }
 }
 
 // Get resources with plan-based limits and filtering
 export const getResources = async (filters = {}, lastDoc = null, limitCount = 20, userPlan = 'free') => {
   try {
+    console.log(`🔍 getResources called with plan: ${userPlan}, limit: ${limitCount}`)
+
     // Get all resources first, then filter in JavaScript to handle both old and new structures
     let q = collection(db, 'resources')
 
     // Basic ordering by created_at (works for both structures)
-    q = query(q, orderBy('created_at', 'desc'), limit(limitCount * 3)) // Get more to account for filtering
+    q = query(q, orderBy('created_at', 'desc'), limit(limitCount * 5)) // Get more to account for filtering
 
     const querySnapshot = await getDocs(q)
     const allResources = []
 
+    console.log(`📊 Raw documents fetched: ${querySnapshot.size}`)
+
     querySnapshot.forEach((doc) => {
-      const normalizedResource = normalizeResource(doc)
-      allResources.push(normalizedResource)
+      try {
+        const normalizedResource = normalizeResource(doc)
+        if (normalizedResource && normalizedResource.title) {
+          allResources.push(normalizedResource)
+        }
+      } catch (error) {
+        console.error(`Error normalizing resource ${doc.id}:`, error)
+      }
     })
+
+    console.log(`📋 Normalized resources: ${allResources.length}`)
 
     // Apply plan-based access level filtering
     const planAccessLevels = {
@@ -155,15 +183,22 @@ export const getResources = async (filters = {}, lastDoc = null, limitCount = 20
       enterprise: ['demo', 'free', 'pro', 'enterprise']
     }
 
-    const allowedLevels = planAccessLevels[userPlan] || ['demo']
+    const allowedLevels = planAccessLevels[userPlan] || ['demo', 'free']
+    console.log(`🔒 Allowed access levels for ${userPlan}:`, allowedLevels)
 
     // Filter resources based on plan access and other criteria
     let filteredResources = allResources.filter(resource => {
-      // Check if resource is active
-      if (resource.status !== 'active') return false
+      // Check if resource is active (be more lenient)
+      if (resource.status && resource.status !== 'active') return false
+
+      // For old resources without access_level, default to 'free'
+      const resourceAccessLevel = resource.access_level || 'free'
 
       // Check access level
-      if (!allowedLevels.includes(resource.access_level)) return false
+      if (!allowedLevels.includes(resourceAccessLevel)) {
+        console.log(`❌ Resource ${resource.title} blocked - access level: ${resourceAccessLevel}`)
+        return false
+      }
 
       // Apply type filter
       if (filters.type && resource.type !== filters.type) return false
@@ -173,6 +208,8 @@ export const getResources = async (filters = {}, lastDoc = null, limitCount = 20
 
       return true
     })
+
+    console.log(`✅ Filtered resources: ${filteredResources.length}`)
 
     // Limit results
     filteredResources = filteredResources.slice(0, limitCount)
@@ -440,6 +477,8 @@ export const deleteResource = async (resourceId) => {
 // Get resources with plan-based limits
 export const getResourcesWithPlanLimits = async (userPlan = 'free', filters = {}) => {
   try {
+    console.log(`🔍 Fetching resources for plan: ${userPlan}`)
+
     const planLimits = PLAN_LIMITS[userPlan] || PLAN_LIMITS.free
     const results = {
       jobs: [],
@@ -455,36 +494,50 @@ export const getResourcesWithPlanLimits = async (userPlan = 'free', filters = {}
       totalAvailable: 0
     }
 
-    // Get each type of resource with limits
-    const types = ['job', 'course', 'tool']
+    // Get ALL resources first, then distribute them
+    const allResourcesResponse = await getResources({}, null, 1000, userPlan)
 
-    for (const type of types) {
-      const typeLimit = planLimits[type + 's'] // jobs, courses, tools
-
-      if (typeLimit === -1) {
-        // Unlimited for enterprise
-        const typeFilters = { ...filters, type }
-        const response = await getResources(typeFilters, null, 1000, userPlan)
-
-        if (response.success) {
-          results[type + 's'] = response.data
-          results.totalShown += response.data.length
-          results.totalAvailable += response.data.length
-        }
-      } else {
-        // Limited for free/pro plans
-        const typeFilters = { ...filters, type }
-        const response = await getResources(typeFilters, null, typeLimit + 50, userPlan) // Get extra to check if more available
-
-        if (response.success) {
-          const resources = response.data
-          results[type + 's'] = resources.slice(0, typeLimit)
-          results.hasMore[type + 's'] = resources.length > typeLimit
-          results.totalShown += Math.min(resources.length, typeLimit)
-          results.totalAvailable += resources.length
-        }
-      }
+    if (!allResourcesResponse.success) {
+      console.error('Failed to fetch resources:', allResourcesResponse.error)
+      return { success: false, error: allResourcesResponse.error }
     }
+
+    const allResources = allResourcesResponse.data
+    console.log(`📊 Total resources fetched: ${allResources.length}`)
+
+    // Separate by type
+    const jobResources = allResources.filter(r => r.type === 'job')
+    const courseResources = allResources.filter(r => r.type === 'course')
+    const toolResources = allResources.filter(r => r.type === 'tool')
+
+    console.log(`📋 By type - Jobs: ${jobResources.length}, Courses: ${courseResources.length}, Tools: ${toolResources.length}`)
+
+    // Apply limits based on plan
+    if (userPlan === 'enterprise') {
+      // Unlimited for enterprise
+      results.jobs = jobResources
+      results.courses = courseResources
+      results.tools = toolResources
+    } else {
+      // Apply limits for free/pro
+      const jobLimit = planLimits.jobs
+      const courseLimit = planLimits.courses
+      const toolLimit = planLimits.tools
+
+      results.jobs = jobResources.slice(0, jobLimit)
+      results.courses = courseResources.slice(0, courseLimit)
+      results.tools = toolResources.slice(0, toolLimit)
+
+      // Check if there are more resources available
+      results.hasMore.jobs = jobResources.length > jobLimit
+      results.hasMore.courses = courseResources.length > courseLimit
+      results.hasMore.tools = toolResources.length > toolLimit
+    }
+
+    results.totalShown = results.jobs.length + results.courses.length + results.tools.length
+    results.totalAvailable = allResources.length
+
+    console.log(`✅ Returning ${results.totalShown} resources for ${userPlan} plan`)
 
     return {
       success: true,

@@ -59,34 +59,41 @@ function ResourcesContent() {
   const loadResources = async () => {
     try {
       setLoading(true)
+      console.log('🔄 Loading resources...')
 
       if (!userData) {
+        console.log('⏳ No user data yet, waiting...')
         setLoading(false)
         return
       }
 
       const userPlan = userData.subscription?.selected_plan || 'free'
-      const approvalStatus = userData.subscription?.approval_status || 'pending'
+      const approvalStatus = userData.subscription?.approval_status || 'approved' // Default to approved for free
 
-      // If user is not approved, show upgrade prompt
+      console.log(`👤 User plan: ${userPlan}, approval: ${approvalStatus}`)
+
+      // If user is not approved for paid plans, show upgrade prompt
       if (approvalStatus !== 'approved' && userPlan !== 'free') {
+        console.log('🚫 User not approved for paid plan, showing upgrade prompt')
         setShowUpgradePrompt(true)
         setLoading(false)
         return
       }
 
       // Get resources with plan limits
+      console.log(`📊 Fetching resources for ${userPlan} plan...`)
       const result = await getResourcesWithPlanLimits(userPlan, {})
 
       if (result.success) {
+        console.log('✅ Resources loaded successfully:', result.data)
         setResources(result.data)
         setPlanData(result.data)
       } else {
-        console.error('Error loading resources:', result.error)
+        console.error('❌ Error loading resources:', result.error)
         setResources({ jobs: [], courses: [], tools: [], hasMore: {}, limits: {} })
       }
     } catch (error) {
-      console.error('Error loading resources:', error)
+      console.error('💥 Exception loading resources:', error)
       setResources({ jobs: [], courses: [], tools: [], hasMore: {}, limits: {} })
     } finally {
       setLoading(false)
@@ -245,12 +252,21 @@ function ResourcesContent() {
         </div>
 
         {/* Results */}
-        <div className="mb-6">
-          <p className="text-gray-600 text-center">
-            Showing {filteredResources.length} of {resources.length} resources
+        <div className="mb-6 flex items-center justify-between">
+          <p className="text-gray-600">
+            Showing {filteredResources.length} of {getTypeCount('all')} resources
             {searchTerm && ` for "${searchTerm}"`}
             {selectedType !== 'all' && ` in ${selectedType}s`}
           </p>
+          <button
+            onClick={() => {
+              console.log('🔄 Force refresh triggered')
+              loadResources()
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+          >
+            🔄 Refresh
+          </button>
         </div>
 
         {/* Resources Grid */}
@@ -345,13 +361,31 @@ function ResourcesContent() {
           </div>
         )}
 
+        {/* Debug Information (only in development) */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="bg-gray-100 rounded-lg p-4 mb-6 text-sm">
+            <h4 className="font-bold mb-2">🔍 Debug Info:</h4>
+            <p><strong>User Plan:</strong> {userData?.subscription?.selected_plan || 'free'}</p>
+            <p><strong>Approval Status:</strong> {userData?.subscription?.approval_status || 'approved'}</p>
+            <p><strong>Resources Object:</strong> {JSON.stringify(resources, null, 2).substring(0, 200)}...</p>
+            <p><strong>All Resources Count:</strong> {allResources.length}</p>
+            <p><strong>Filtered Resources Count:</strong> {filteredResources.length}</p>
+          </div>
+        )}
+
         {/* Call to Action */}
-        {resources.length === 0 && !loading && (
+        {getTypeCount('all') === 0 && !loading && (
           <div className="text-center py-12">
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No resources available yet</h3>
             <p className="text-gray-600 mb-4">
               We're working hard to add amazing resources for you. Check back soon!
             </p>
+            <button
+              onClick={loadResources}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              🔄 Try Again
+            </button>
           </div>
         )}
       </div>
