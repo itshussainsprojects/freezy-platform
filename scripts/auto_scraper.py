@@ -534,13 +534,19 @@ class FreezyAutomationEngine:
         for index, resource in enumerate(resources):
             try:
                 # Check if resource already exists (avoid duplicates)
-                existing_query = self.db.collection('resources').where(
+                # Check both old and new structure
+                existing_query_old = self.db.collection('resources').where(
                     'title', '==', resource['title']
                 ).limit(1)
 
-                existing_docs = existing_query.get()
+                existing_query_new = self.db.collection('resources').where(
+                    'metadata.title', '==', resource['title']
+                ).limit(1)
 
-                if len(existing_docs) == 0:
+                existing_docs_old = existing_query_old.get()
+                existing_docs_new = existing_query_new.get()
+
+                if len(existing_docs_old) == 0 and len(existing_docs_new) == 0:
                     # Assign access level based on quality and distribution
                     access_level = self.assign_access_level(resource, index, len(resources))
 

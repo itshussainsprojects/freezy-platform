@@ -474,70 +474,64 @@ export const deleteResource = async (resourceId) => {
   }
 }
 
-// Get resources with plan-based limits
+// Get resources with plan-based limits - SIMPLIFIED VERSION
 export const getResourcesWithPlanLimits = async (userPlan = 'free', filters = {}) => {
   try {
     console.log(`🔍 Fetching resources for plan: ${userPlan}`)
 
     const planLimits = PLAN_LIMITS[userPlan] || PLAN_LIMITS.free
-    const results = {
-      jobs: [],
-      courses: [],
-      tools: [],
-      hasMore: {
-        jobs: false,
-        courses: false,
-        tools: false
-      },
-      limits: planLimits,
-      totalShown: 0,
-      totalAvailable: 0
-    }
 
-    // Get ALL resources first, then distribute them
-    const allResourcesResponse = await getResources({}, null, 1000, userPlan)
+    // Get ALL resources from database directly (bypass complex filtering)
+    const q = query(
+      collection(db, 'resources'),
+      orderBy('created_at', 'desc'),
+      limit(500) // Get plenty of resources
+    )
 
-    if (!allResourcesResponse.success) {
-      console.error('Failed to fetch resources:', allResourcesResponse.error)
-      return { success: false, error: allResourcesResponse.error }
-    }
+    const querySnapshot = await getDocs(q)
+    const allResources = []
 
-    const allResources = allResourcesResponse.data
-    console.log(`📊 Total resources fetched: ${allResources.length}`)
+    console.log(`📊 Raw documents from Firebase: ${querySnapshot.size}`)
+
+    querySnapshot.forEach((doc) => {
+      try {
+        const normalizedResource = normalizeResource(doc)
+        if (normalizedResource && normalizedResource.title) {
+          allResources.push(normalizedResource)
+        }
+      } catch (error) {
+        console.error(`Error normalizing resource ${doc.id}:`, error)
+      }
+    })
+
+    console.log(`📋 Successfully normalized: ${allResources.length} resources`)
 
     // Separate by type
     const jobResources = allResources.filter(r => r.type === 'job')
     const courseResources = allResources.filter(r => r.type === 'course')
     const toolResources = allResources.filter(r => r.type === 'tool')
 
-    console.log(`📋 By type - Jobs: ${jobResources.length}, Courses: ${courseResources.length}, Tools: ${toolResources.length}`)
+    console.log(`📊 By type - Jobs: ${jobResources.length}, Courses: ${courseResources.length}, Tools: ${toolResources.length}`)
 
-    // Apply limits based on plan
-    if (userPlan === 'enterprise') {
-      // Unlimited for enterprise
-      results.jobs = jobResources
-      results.courses = courseResources
-      results.tools = toolResources
-    } else {
-      // Apply limits for free/pro
-      const jobLimit = planLimits.jobs
-      const courseLimit = planLimits.courses
-      const toolLimit = planLimits.tools
-
-      results.jobs = jobResources.slice(0, jobLimit)
-      results.courses = courseResources.slice(0, courseLimit)
-      results.tools = toolResources.slice(0, toolLimit)
-
-      // Check if there are more resources available
-      results.hasMore.jobs = jobResources.length > jobLimit
-      results.hasMore.courses = courseResources.length > courseLimit
-      results.hasMore.tools = toolResources.length > toolLimit
+    // Apply plan limits
+    const results = {
+      jobs: jobResources.slice(0, planLimits.jobs === -1 ? jobResources.length : planLimits.jobs),
+      courses: courseResources.slice(0, planLimits.courses === -1 ? courseResources.length : planLimits.courses),
+      tools: toolResources.slice(0, planLimits.tools === -1 ? toolResources.length : planLimits.tools),
+      hasMore: {
+        jobs: planLimits.jobs !== -1 && jobResources.length > planLimits.jobs,
+        courses: planLimits.courses !== -1 && courseResources.length > planLimits.courses,
+        tools: planLimits.tools !== -1 && toolResources.length > planLimits.tools
+      },
+      limits: planLimits,
+      totalShown: 0,
+      totalAvailable: allResources.length
     }
 
     results.totalShown = results.jobs.length + results.courses.length + results.tools.length
-    results.totalAvailable = allResources.length
 
     console.log(`✅ Returning ${results.totalShown} resources for ${userPlan} plan`)
+    console.log(`📊 Final counts - Jobs: ${results.jobs.length}, Courses: ${results.courses.length}, Tools: ${results.tools.length}`)
 
     return {
       success: true,

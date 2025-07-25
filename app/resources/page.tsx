@@ -31,15 +31,23 @@ function ResourcesContent() {
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
 
   useEffect(() => {
-    loadResources()
-
     // Check URL parameters for initial filter
     const typeParam = searchParams.get('type')
     if (typeParam && ['job', 'course', 'tool'].includes(typeParam)) {
       setSelectedType(typeParam)
     }
+  }, [searchParams])
 
-    // Load user's saved resources to check which ones are already saved
+  // Load resources when userData is available
+  useEffect(() => {
+    if (userData) {
+      console.log('🔄 userData available, loading resources...')
+      loadResources()
+    }
+  }, [userData])
+
+  // Load saved resources when user is available
+  useEffect(() => {
     const loadSavedStatus = async () => {
       if (user) {
         try {
@@ -53,48 +61,68 @@ function ResourcesContent() {
       }
     }
 
-    loadSavedStatus()
-  }, [user, searchParams])
+    if (user) {
+      loadSavedStatus()
+    }
+  }, [user])
+
+  // Auto-retry if no resources loaded
+  useEffect(() => {
+    if (!loading && userData && getTypeCount('all') === 0) {
+      console.log('🔄 Auto-retry: No resources found, retrying in 3 seconds...')
+      const timer = setTimeout(() => {
+        console.log('🔄 Retrying resource load...')
+        loadResources()
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [loading, userData])
 
   const loadResources = async () => {
     try {
       setLoading(true)
       console.log('🔄 Loading resources...')
 
-      if (!userData) {
-        console.log('⏳ No user data yet, waiting...')
-        setLoading(false)
-        return
-      }
-
-      const userPlan = userData.subscription?.selected_plan || 'free'
-      const approvalStatus = userData.subscription?.approval_status || 'approved' // Default to approved for free
+      // Always load resources, even without userData (for guest users)
+      const userPlan = userData?.subscription?.selected_plan || 'free'
+      const approvalStatus = userData?.subscription?.approval_status || 'approved'
 
       console.log(`👤 User plan: ${userPlan}, approval: ${approvalStatus}`)
 
-      // If user is not approved for paid plans, show upgrade prompt
-      if (approvalStatus !== 'approved' && userPlan !== 'free') {
-        console.log('🚫 User not approved for paid plan, showing upgrade prompt')
-        setShowUpgradePrompt(true)
-        setLoading(false)
-        return
-      }
-
-      // Get resources with plan limits
+      // Get resources with plan limits - simplified approach
       console.log(`📊 Fetching resources for ${userPlan} plan...`)
       const result = await getResourcesWithPlanLimits(userPlan, {})
 
-      if (result.success) {
-        console.log('✅ Resources loaded successfully:', result.data)
+      if (result.success && result.data) {
+        console.log('✅ Resources loaded successfully')
+        console.log(`📊 Jobs: ${result.data.jobs?.length || 0}, Courses: ${result.data.courses?.length || 0}, Tools: ${result.data.tools?.length || 0}`)
         setResources(result.data)
         setPlanData(result.data)
       } else {
         console.error('❌ Error loading resources:', result.error)
-        setResources({ jobs: [], courses: [], tools: [], hasMore: {}, limits: {} })
+        // Initialize with empty arrays
+        const emptyData = {
+          jobs: [],
+          courses: [],
+          tools: [],
+          hasMore: { jobs: false, courses: false, tools: false },
+          limits: { total: 40, jobs: 10, courses: 15, tools: 15 }
+        }
+        setResources(emptyData)
+        setPlanData(emptyData)
       }
     } catch (error) {
       console.error('💥 Exception loading resources:', error)
-      setResources({ jobs: [], courses: [], tools: [], hasMore: {}, limits: {} })
+      // Initialize with empty arrays on error
+      const emptyData = {
+        jobs: [],
+        courses: [],
+        tools: [],
+        hasMore: { jobs: false, courses: false, tools: false },
+        limits: { total: 40, jobs: 10, courses: 15, tools: 15 }
+      }
+      setResources(emptyData)
+      setPlanData(emptyData)
     } finally {
       setLoading(false)
     }
@@ -252,21 +280,12 @@ function ResourcesContent() {
         </div>
 
         {/* Results */}
-        <div className="mb-6 flex items-center justify-between">
-          <p className="text-gray-600">
+        <div className="mb-6">
+          <p className="text-gray-600 text-center">
             Showing {filteredResources.length} of {getTypeCount('all')} resources
             {searchTerm && ` for "${searchTerm}"`}
             {selectedType !== 'all' && ` in ${selectedType}s`}
           </p>
-          <button
-            onClick={() => {
-              console.log('🔄 Force refresh triggered')
-              loadResources()
-            }}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-          >
-            🔄 Refresh
-          </button>
         </div>
 
         {/* Resources Grid */}
@@ -361,17 +380,7 @@ function ResourcesContent() {
           </div>
         )}
 
-        {/* Debug Information (only in development) */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="bg-gray-100 rounded-lg p-4 mb-6 text-sm">
-            <h4 className="font-bold mb-2">🔍 Debug Info:</h4>
-            <p><strong>User Plan:</strong> {userData?.subscription?.selected_plan || 'free'}</p>
-            <p><strong>Approval Status:</strong> {userData?.subscription?.approval_status || 'approved'}</p>
-            <p><strong>Resources Object:</strong> {JSON.stringify(resources, null, 2).substring(0, 200)}...</p>
-            <p><strong>All Resources Count:</strong> {allResources.length}</p>
-            <p><strong>Filtered Resources Count:</strong> {filteredResources.length}</p>
-          </div>
-        )}
+
 
         {/* Call to Action */}
         {getTypeCount('all') === 0 && !loading && (
