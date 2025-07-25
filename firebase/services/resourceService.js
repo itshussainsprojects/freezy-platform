@@ -545,9 +545,28 @@ export const getResourcesWithPlanLimits = async (userPlan = 'free', filters = {}
         }
 
         if (normalizedResource) {
-          // Only include active resources (REVERTED: removed access level filtering)
+          // Only include active resources
           if (!normalizedResource.status || normalizedResource.status === 'active') {
-            allResources.push(normalizedResource)
+
+            // PLAN-SPECIFIC FILTERING: Only for admin-added resources with specific access levels
+            const resourceAccessLevel = normalizedResource.access_level
+
+            // If resource has no access level (auto-scraper resources), show to everyone
+            if (!resourceAccessLevel || resourceAccessLevel === 'free') {
+              allResources.push(normalizedResource)
+            }
+            // If resource is specifically assigned to pro plan, only show to pro users
+            else if (resourceAccessLevel === 'pro' && userPlan === 'pro') {
+              allResources.push(normalizedResource)
+            }
+            // If resource is specifically assigned to enterprise plan, only show to enterprise users
+            else if (resourceAccessLevel === 'enterprise' && userPlan === 'enterprise') {
+              allResources.push(normalizedResource)
+            }
+            // Skip resources that don't match user's plan
+            else {
+              console.log(`🔒 Resource ${normalizedResource.title} (${resourceAccessLevel}) not shown to ${userPlan} user`)
+            }
           }
         }
       } catch (error) {
