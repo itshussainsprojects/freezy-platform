@@ -682,23 +682,28 @@ export const deleteUserAdmin = async (userId, adminId) => {
   }
 }
 
-// Get ALL resources
+// Get ALL resources - REMOVE orderBy to get everything
 export const getResources = async () => {
   try {
-    const q = query(
-      collection(db, 'resources'),
-      orderBy('created_at', 'desc')
-    )
+    console.log('🔍 Admin service: Getting ALL resources without orderBy...')
+
+    // Remove orderBy to get ALL documents (some might not have created_at)
+    const q = query(collection(db, 'resources'))
 
     const snapshot = await getDocs(q)
     const resources = []
 
+    console.log(`📊 Admin service: Found ${snapshot.size} total documents`)
+
     snapshot.forEach((doc) => {
+      const data = doc.data()
       resources.push({
         id: doc.id,
-        ...doc.data()
+        ...data
       })
     })
+
+    console.log(`📊 Admin service: Returning ${resources.length} resources`)
 
     return {
       success: true,

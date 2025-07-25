@@ -488,7 +488,13 @@ export const getResourcesWithPlanLimits = async (userPlan = 'free', filters = {}
 
     const planLimits = PLAN_LIMITS[userPlan] || PLAN_LIMITS.free
 
-    // Use EXACT same method as admin panel (which gets all 88 resources)
+    // FIRST: Test direct collection query to see total documents
+    console.log(`📊 Testing direct collection query...`)
+    const directQuery = query(collection(db, 'resources'))
+    const directSnapshot = await getDocs(directQuery)
+    console.log(`📊 DIRECT QUERY: Found ${directSnapshot.size} total documents in collection`)
+
+    // SECOND: Use admin service method
     console.log(`📊 Using admin service method to get ALL resources...`)
     const adminResult = await getAdminResources()
 
