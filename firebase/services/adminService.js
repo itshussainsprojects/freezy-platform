@@ -713,20 +713,49 @@ export const getResources = async () => {
   }
 }
 
-// Create new resource
+// Create new resource with new structure
 export const createResource = async (resourceData, adminId) => {
   try {
     const batch = writeBatch(db)
 
-    // Create resource
+    // Create resource with new structure (metadata, content, visibility)
     const resourceRef = doc(collection(db, 'resources'))
-    batch.set(resourceRef, {
-      ...resourceData,
+    const newResourceData = {
+      metadata: {
+        title: resourceData.title,
+        description: resourceData.description,
+        type: resourceData.type,
+        source_url: resourceData.source_url || '',
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+        created_by: adminId
+      },
+      content: {
+        company: resourceData.company || '',
+        location: resourceData.location || '',
+        duration: resourceData.duration || '',
+        requirements: resourceData.requirements || '',
+        benefits: resourceData.benefits || '',
+        location_type: resourceData.location?.includes('Remote') ? 'Remote' : 'Onsite'
+      },
+      visibility: {
+        status: resourceData.status || 'active',
+        access_level: resourceData.access_level || 'free',
+        is_featured: resourceData.access_level === 'enterprise',
+        priority_score: resourceData.access_level === 'enterprise' ? 100 :
+                       resourceData.access_level === 'pro' ? 80 : 60
+      },
+      // Also add flat fields for backward compatibility
+      title: resourceData.title,
+      description: resourceData.description,
+      type: resourceData.type,
+      status: resourceData.status || 'active',
       created_at: serverTimestamp(),
       updated_at: serverTimestamp(),
-      created_by: adminId,
-      status: resourceData.status || 'active'
-    })
+      created_by: adminId
+    }
+
+    batch.set(resourceRef, newResourceData)
 
     // Log admin action
     const auditRef = doc(collection(db, 'admin_actions'))

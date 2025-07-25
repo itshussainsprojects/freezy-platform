@@ -28,7 +28,8 @@ export default function AddResourcePage() {
     source_url: '',
     requirements: '',
     benefits: '',
-    status: 'active'
+    status: 'active',
+    access_level: 'free' // New field for plan assignment
   })
 
   const handleSubmit = async (e) => {
@@ -219,6 +220,25 @@ export default function AddResourcePage() {
                   <option value="inactive">Inactive</option>
                   <option value="pending">Pending</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Access Level (Plan Assignment)
+                </label>
+                <select
+                  name="access_level"
+                  value={formData.access_level}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="free">Free Plan (38 resources)</option>
+                  <option value="pro">Pro Plan (200 PKR - 200 resources)</option>
+                  <option value="enterprise">Enterprise Plan (400 PKR - Unlimited)</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Choose which plan users need to access this resource
+                </p>
               </div>
             </div>
           </div>
