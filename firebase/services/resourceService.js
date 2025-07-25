@@ -114,7 +114,7 @@ const normalizeResource = (doc) => {
         benefits: data.content?.benefits || '',
         source_url: data.metadata.source_url || '',
         created_at: data.metadata.created_at,
-        status: data.visibility?.status || 'active',
+        status: data.visibility?.status || data.status || 'active', // Check both locations
         access_level: data.visibility?.access_level || 'free'
       }
     }
@@ -188,15 +188,18 @@ export const getResources = async (filters = {}, lastDoc = null, limitCount = 20
 
     // Filter resources based on plan access and other criteria
     let filteredResources = allResources.filter(resource => {
-      // Check if resource is active (be more lenient)
-      if (resource.status && resource.status !== 'active') return false
+      // Check if resource is active (be more lenient - if no status, assume active)
+      if (resource.status && resource.status !== 'active') {
+        console.log(`❌ Resource ${resource.title} blocked - status: ${resource.status}`)
+        return false
+      }
 
       // For old resources without access_level, default to 'free'
       const resourceAccessLevel = resource.access_level || 'free'
 
-      // Check access level
+      // Check access level (be more lenient for debugging)
       if (!allowedLevels.includes(resourceAccessLevel)) {
-        console.log(`❌ Resource ${resource.title} blocked - access level: ${resourceAccessLevel}`)
+        console.log(`❌ Resource ${resource.title} blocked - access level: ${resourceAccessLevel}, allowed: ${allowedLevels}`)
         return false
       }
 
@@ -206,6 +209,7 @@ export const getResources = async (filters = {}, lastDoc = null, limitCount = 20
       // Apply category filter
       if (filters.category && resource.category !== filters.category) return false
 
+      console.log(`✅ Resource ${resource.title} passed all filters`)
       return true
     })
 
@@ -474,18 +478,17 @@ export const deleteResource = async (resourceId) => {
   }
 }
 
-// Get resources with plan-based limits - SIMPLIFIED VERSION
+// Get resources with plan-based limits - USE SAME METHOD AS ADMIN
 export const getResourcesWithPlanLimits = async (userPlan = 'free', filters = {}) => {
   try {
     console.log(`🔍 Fetching resources for plan: ${userPlan}`)
 
     const planLimits = PLAN_LIMITS[userPlan] || PLAN_LIMITS.free
 
-    // Get ALL resources from database directly (bypass complex filtering)
+    // Use the SAME query as admin panel (which works and shows 88 resources)
     const q = query(
       collection(db, 'resources'),
-      orderBy('created_at', 'desc'),
-      limit(500) // Get plenty of resources
+      orderBy('created_at', 'desc')
     )
 
     const querySnapshot = await getDocs(q)
@@ -495,16 +498,60 @@ export const getResourcesWithPlanLimits = async (userPlan = 'free', filters = {}
 
     querySnapshot.forEach((doc) => {
       try {
-        const normalizedResource = normalizeResource(doc)
-        if (normalizedResource && normalizedResource.title) {
-          allResources.push(normalizedResource)
+        const data = doc.data()
+
+        // Use SAME normalization as admin panel
+        let normalizedResource = null
+
+        // New structure (with metadata)
+        if (data.metadata && data.metadata.title) {
+          normalizedResource = {
+            id: doc.id,
+            title: data.metadata.title,
+            description: data.metadata.description || 'No description',
+            type: data.metadata.type || 'job',
+            company: data.content?.company || '',
+            location: data.content?.location || '',
+            duration: data.content?.duration || '',
+            requirements: data.content?.requirements || '',
+            benefits: data.content?.benefits || '',
+            source_url: data.metadata.source_url || '',
+            created_at: data.metadata.created_at,
+            status: data.visibility?.status || data.status || 'active',
+            access_level: data.visibility?.access_level || 'free'
+          }
+        }
+        // Old structure (flat)
+        else if (data.title) {
+          normalizedResource = {
+            id: doc.id,
+            title: data.title,
+            description: data.description || 'No description',
+            type: data.type || 'job',
+            company: data.company || '',
+            location: data.location || '',
+            duration: data.duration || '',
+            requirements: data.requirements || '',
+            benefits: data.benefits || '',
+            source_url: data.source_url || '',
+            created_at: data.created_at,
+            status: data.status || 'active',
+            access_level: 'free' // Default old resources to free
+          }
+        }
+
+        if (normalizedResource) {
+          // Only include active resources
+          if (!normalizedResource.status || normalizedResource.status === 'active') {
+            allResources.push(normalizedResource)
+          }
         }
       } catch (error) {
-        console.error(`Error normalizing resource ${doc.id}:`, error)
+        console.error(`Error processing resource ${doc.id}:`, error)
       }
     })
 
-    console.log(`📋 Successfully normalized: ${allResources.length} resources`)
+    console.log(`📋 Successfully processed: ${allResources.length} active resources`)
 
     // Separate by type
     const jobResources = allResources.filter(r => r.type === 'job')

@@ -735,6 +735,8 @@ class FreezyAutomationEngine:
                             'is_featured': access_level == 'enterprise',  # Enterprise resources are featured
                             'priority_score': 100 if access_level == 'enterprise' else (80 if access_level == 'pro' else 60)
                         },
+                        # Also add flat status for backward compatibility
+                        'status': 'active',
                         'analytics': {
                             'view_count': 0,
                             'save_count': 0,
