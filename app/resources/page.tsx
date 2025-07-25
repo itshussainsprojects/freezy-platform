@@ -30,6 +30,15 @@ function ResourcesContent() {
   const [savedResources, setSavedResources] = useState(new Set())
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
 
+  // Handle initial loading state for non-logged users
+  useEffect(() => {
+    // If we know for sure there's no user, stop loading immediately
+    if (user === null) {
+      console.log('👤 No user detected, stopping loading state')
+      setLoading(false)
+    }
+  }, [user])
+
   useEffect(() => {
     // Check URL parameters for initial filter
     const typeParam = searchParams.get('type')
@@ -38,13 +47,17 @@ function ResourcesContent() {
     }
   }, [searchParams])
 
-  // Load resources when userData is available
+  // Load resources when userData is available OR when we know user is not logged in
   useEffect(() => {
     if (userData) {
       console.log('🔄 userData available, loading resources...')
       loadResources()
+    } else if (user === null) {
+      // User is definitely not logged in (not just loading)
+      console.log('👤 No user logged in, stopping loading...')
+      setLoading(false)
     }
-  }, [userData])
+  }, [userData, user])
 
   // Load saved resources when user is available
   useEffect(() => {
@@ -66,9 +79,9 @@ function ResourcesContent() {
     }
   }, [user])
 
-  // Auto-retry if no resources loaded
+  // Auto-retry if no resources loaded (only for logged-in users)
   useEffect(() => {
-    if (!loading && userData && getTypeCount('all') === 0) {
+    if (!loading && user && userData && getTypeCount('all') === 0) {
       console.log('🔄 Auto-retry: No resources found, retrying in 3 seconds...')
       const timer = setTimeout(() => {
         console.log('🔄 Retrying resource load...')
@@ -76,7 +89,7 @@ function ResourcesContent() {
       }, 3000)
       return () => clearTimeout(timer)
     }
-  }, [loading, userData])
+  }, [loading, user, userData])
 
   const loadResources = async () => {
     try {
