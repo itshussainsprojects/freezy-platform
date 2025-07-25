@@ -619,10 +619,10 @@ class FreezyAutomationEngine:
 
     def assign_access_level(self, resource, resource_index, total_resources):
         """Assign access level based on resource quality and plan distribution"""
-        # Distribute resources across plans:
-        # Free: First 40% of resources (basic/demo content)
-        # Pro: Next 40% of resources (quality content)
-        # Enterprise: Last 20% of resources (premium content)
+        # UPDATED DISTRIBUTION to ensure more free resources:
+        # Free: First 60% of resources (to ensure 38+ free resources)
+        # Pro: Next 30% of resources (quality content)
+        # Enterprise: Last 10% of resources (premium content)
 
         percentage = (resource_index / total_resources) * 100
 
@@ -637,17 +637,17 @@ class FreezyAutomationEngine:
         # Remote/worldwide jobs are more valuable
         is_remote = 'remote' in resource.get('location', '').lower() or 'worldwide' in resource.get('location', '').lower()
 
-        if percentage <= 40:
-            # First 40% - Free tier
+        if percentage <= 60:
+            # First 60% - Free tier (ensures plenty of free resources)
             return 'free'
-        elif percentage <= 80:
-            # Next 40% - Pro tier
+        elif percentage <= 90:
+            # Next 30% - Pro tier
             if has_quality_keywords or has_quality_company or is_remote:
                 return 'pro'
             else:
                 return 'free'  # Keep some in free if not high quality
         else:
-            # Last 20% - Enterprise tier
+            # Last 10% - Enterprise tier (only premium content)
             return 'enterprise'
 
     def save_to_firebase(self, resources):
