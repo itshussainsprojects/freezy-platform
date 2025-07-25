@@ -105,6 +105,7 @@ export const ensureUserDocument = async (user) => {
           const plan = currentSubscription.selected_plan || 'free'
           subscriptionUpdates['subscription.approval_status'] = plan === 'free' ? 'approved' : 'pending'
         }
+        // IMPORTANT: Don't change existing approval status - preserve admin decisions
         if (!currentSubscription.approved_by && currentSubscription.approval_status === 'approved') {
           subscriptionUpdates['subscription.approved_by'] = 'system'
         }

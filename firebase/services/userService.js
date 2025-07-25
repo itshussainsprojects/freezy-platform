@@ -53,7 +53,7 @@ export const updateUserPlan = async (userId, planData) => {
     const currentApprovedBy = currentData?.subscription?.approved_by
     const currentApprovedAt = currentData?.subscription?.approved_at
 
-    // Smart approval logic
+    // CORRECTED: Smart approval logic for business model
     let newApprovalStatus = 'pending'
     let approvedBy = null
     let approvedAt = null
@@ -63,17 +63,14 @@ export const updateUserPlan = async (userId, planData) => {
       newApprovalStatus = 'approved'
       approvedBy = 'system'
       approvedAt = serverTimestamp()
-    } else if (currentApprovalStatus === 'approved' && currentApprovedBy) {
-      // If user was previously approved, keep approval for plan changes
-      // (Admin already verified this user)
-      newApprovalStatus = 'approved'
-      approvedBy = currentApprovedBy
-      approvedAt = currentApprovedAt || serverTimestamp()
     } else {
-      // New paid plan for unapproved user
+      // PAID PLANS ALWAYS REQUIRE APPROVAL (to verify payment)
+      // This is essential for business model - admin must verify payment
       newApprovalStatus = 'pending'
       approvedBy = null
       approvedAt = null
+
+      console.log(`🔒 User ${userId} upgrading to ${planData.plan} - requires admin approval for payment verification`)
     }
 
     const updateData = {
@@ -87,10 +84,8 @@ export const updateUserPlan = async (userId, planData) => {
     await updateDoc(userRef, updateData)
 
     const message = planData.plan === 'free'
-      ? `Plan updated to ${planData.plan}.`
-      : newApprovalStatus === 'approved'
-        ? `Plan updated to ${planData.plan}. Access granted immediately.`
-        : `Plan updated to ${planData.plan}. Awaiting admin approval.`
+      ? `Plan updated to ${planData.plan}. Access granted immediately.`
+      : `Plan updated to ${planData.plan}. Please send payment screenshot via WhatsApp for admin approval.`
 
     return {
       success: true,

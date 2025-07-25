@@ -71,7 +71,7 @@ const UpgradePrompt: React.FC<UpgradePromptProps> = ({
   }
 
   const currentLimits = {
-    free: { total: 40, jobs: 10, courses: 15, tools: 15 },
+    free: { total: 38, jobs: 12, courses: 13, tools: 13 },
     pro: { total: 200, jobs: 80, courses: 60, tools: 60 },
     enterprise: { total: -1, jobs: -1, courses: -1, tools: -1 }
   }

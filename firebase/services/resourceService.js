@@ -68,13 +68,13 @@ export const addResource = async (resourceData) => {
   }
 }
 
-// Plan-based resource limits - BACK TO BUSINESS MODEL
+// Plan-based resource limits - UPDATED FREE PLAN TO 38 RESOURCES
 const PLAN_LIMITS = {
   free: {
-    total: 40,
-    jobs: 10,
-    courses: 15,
-    tools: 15
+    total: 38,
+    jobs: 12,  // Increased from 10
+    courses: 13, // Decreased from 15
+    tools: 13   // Decreased from 15
   },
   pro: {
     total: 200,
